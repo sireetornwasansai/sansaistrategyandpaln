@@ -5,22 +5,25 @@
 
   // ---------------------------------------------------------------- เมนู
   const NAV = [
-    { id: 'dashboard', label: 'ภาพรวม', icon: '📊', hash: '#/dashboard' },
-    { id: 'plans', label: 'แผนงาน/โครงการ', icon: '📋', hash: '#/plans' },
-    { id: 'overdue', label: 'ค้างส่งสรุป', icon: '⏰', hash: '#/overdue' },
-    { id: 'fix', label: 'ข้อมูลรอแก้ไข', icon: '🛠', hash: '#/fix' },
+    { id: 'dashboard', label: 'ภาพรวม', icon: 'fa-chart-line', hash: '#/dashboard' },
+    { id: 'plans', label: 'แผนงาน/โครงการ', icon: 'fa-tasks', hash: '#/plans' },
+    { id: 'overdue', label: 'ค้างส่งสรุป', icon: 'fa-clock', hash: '#/overdue' },
+    { id: 'fix', label: 'ข้อมูลรอแก้ไข', icon: 'fa-screwdriver-wrench', hash: '#/fix' },
     { sep: 'แอดมิน', admin: true },
-    { id: 'users', label: 'ผู้ใช้งาน', icon: '👥', hash: '#/admin/users', admin: true, badge: 'pendingUsers' },
-    { id: 'masters', label: 'ข้อมูลหลัก/ตั้งค่า', icon: '⚙️', hash: '#/admin/masters', admin: true },
-    { id: 'reports', label: 'รายงาน/ส่งออก', icon: '🖨', hash: '#/admin/reports', admin: true },
-    { id: 'audit', label: 'ประวัติการใช้งาน', icon: '🕘', hash: '#/admin/audit', admin: true }
+    { id: 'users', label: 'ผู้ใช้งาน', icon: 'fa-users', hash: '#/admin/users', admin: true, badge: 'pendingUsers' },
+    { id: 'masters', label: 'ข้อมูลหลัก/ตั้งค่า', icon: 'fa-gear', hash: '#/admin/masters', admin: true },
+    { id: 'reports', label: 'รายงาน/ส่งออก', icon: 'fa-print', hash: '#/admin/reports', admin: true },
+    { id: 'audit', label: 'ประวัติการใช้งาน', icon: 'fa-shield-alt', hash: '#/admin/audit', admin: true }
   ];
   function buildNav() {
     $('#nav').innerHTML = NAV.filter(n => !n.admin || App.isAdmin()).map(n => n.sep ? '<div class="nav-sep">' + n.sep + '</div>' :
-      '<a class="nav-item" data-nav="' + n.id + '" href="' + n.hash + '"><span class="ico">' + n.icon + '</span><span>' + esc(n.label) + '</span>' + (n.badge ? '<span class="nav-badge" data-badge="' + n.badge + '" hidden></span>' : '') + '</a>').join('');
+      '<a class="nav-item" data-nav="' + n.id + '" href="' + n.hash + '"><span class="ico"><i class="fas ' + n.icon + '"></i></span><span>' + esc(n.label) + '</span>' + (n.badge ? '<span class="nav-badge" data-badge="' + n.badge + '" hidden></span>' : '') + '</a>').join('');
     const u = S.user;
-    $('#user-chip').innerHTML = (u.picture ? '<img src="' + esc(u.picture) + '" alt="" referrerpolicy="no-referrer">' : '<span class="avatar">' + esc((u.name || u.email).charAt(0)) + '</span>') +
-      '<div class="uc-text"><b>' + esc(u.name) + '</b><span>' + esc({ admin: 'แอดมิน', user: 'เจ้าหน้าที่', viewer: 'ผู้ดูข้อมูล' }[u.role] || u.role) + '</span></div><button class="icon-btn" id="btn-logout" title="ออกจากระบบ" aria-label="ออกจากระบบ">⎋</button>';
+    const roleTh = { admin: 'แอดมิน', user: 'เจ้าหน้าที่', viewer: 'ผู้ดูข้อมูล' }[u.role] || u.role;
+    $('#user-chip').innerHTML = '<div class="role-badge">' + esc(roleTh) + '</div>' +
+      '<div class="user-mini">' + (u.picture ? '<img class="avatar" src="' + esc(u.picture) + '" alt="" referrerpolicy="no-referrer">' : '<span class="avatar">' + esc((u.name || u.email).charAt(0)) + '</span>') +
+      '<span class="nm" title="' + esc(u.email || '') + '">' + esc(u.name || u.email) + '</span></div>' +
+      '<button class="btn-logout" id="btn-logout"><i class="fas fa-sign-out-alt"></i> ออกจากระบบ</button>';
     $('#btn-logout').addEventListener('click', () => App.logout());
     App.updateBadges();
   }
@@ -91,7 +94,7 @@
         clearInterval(t);
         if (!gisReady) { google.accounts.id.initialize({ client_id: idv, callback: onCredential, auto_select: false, cancel_on_tap_outside: true }); gisReady = true; }
         $('#g-btn').innerHTML = '';
-        google.accounts.id.renderButton($('#g-btn'), { theme: 'outline', size: 'large', shape: 'pill', text: 'signin_with', locale: 'th', width: 300 });
+        google.accounts.id.renderButton($('#g-btn'), { theme: 'outline', size: 'large', shape: 'rectangular', text: 'signin_with', locale: 'th', width: 300 });
       } else if (++tries > 60) { clearInterval(t); loginMsg('โหลดระบบ Google Sign-In ไม่สำเร็จ — ตรวจสอบอินเทอร์เน็ตหรือการบล็อกสคริปต์ แล้วรีเฟรชหน้า', 'err'); }
     }, 200);
   }
@@ -104,7 +107,7 @@
         await App.start();
       } else {
         $('#login-spin').hidden = true;
-        const icon = r.status === 'pending' ? '⏳' : '⛔';
+        const icon = r.status === 'pending' ? '<i class="fas fa-hourglass-half"></i>' : '<i class="fas fa-ban"></i>';
         loginMsg('<div class="status-box ' + esc(r.status) + '"><div class="big">' + icon + '</div><b>' + esc(r.message) + '</b><div class="muted small">บัญชี: ' + esc(r.email) + '</div>' +
           (r.status === 'pending' ? '<p class="small">ผู้ดูแลระบบได้รับแจ้งแล้ว เมื่ออนุมัติแล้วให้เข้าสู่ระบบอีกครั้ง</p>' : '') + '<button class="btn" id="btn-other">ใช้บัญชี Google อื่น</button></div>', '');
         $('#btn-other').addEventListener('click', () => { try { google.accounts.id.disableAutoSelect(); } catch (e) { /* ignore */ } App.showLogin(''); });
@@ -115,7 +118,7 @@
   // ---------------------------------------------------------------- boot
   document.addEventListener('DOMContentLoaded', async () => {
     document.title = cfg.APP_NAME || document.title;
-    $('#login-org').textContent = cfg.ORG_NAME || ''; $('#login-title').textContent = cfg.APP_NAME || '';
+    if (cfg.ORG_NAME) $('#login-org-name').textContent = cfg.ORG_NAME;
     const s = App.loadSession();
     if (s) {
       S.token = s.token; S.expiresAt = s.expiresAt; S.user = s.user;

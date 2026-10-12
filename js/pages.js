@@ -9,9 +9,11 @@
   App.destroyCharts = () => { App.charts.forEach(c => { try { c.destroy(); } catch (e) { /* ignore */ } }); App.charts = []; };
   const mkChart = (id, cfg) => { const el = document.getElementById(id); if (!el || typeof Chart === 'undefined') return; App.charts.push(new Chart(el, cfg)); };
 
-  const pageHead = (title, sub, actions) => '<div class="page-head"><div><h1>' + esc(title) + '</h1>' + (sub ? '<p class="muted">' + sub + '</p>' : '') + '</div><div class="head-actions">' + (actions || '') + '</div></div>';
+  const HEAD_ICON = { 'ภาพรวมแผนงาน/โครงการ': 'fa-chart-line', 'แผนงาน/โครงการ': 'fa-tasks', 'ค้างส่งสรุปโครงการ': 'fa-clock', 'ข้อมูลรอแก้ไข': 'fa-screwdriver-wrench',
+    'ผู้ใช้งาน': 'fa-users', 'ข้อมูลหลัก / ตั้งค่า': 'fa-gear', 'ประวัติการใช้งานระบบ': 'fa-shield-alt', 'รายงาน / ส่งออก': 'fa-print' };
+  const pageHead = (title, sub, actions) => '<div class="page-head"><div><h1>' + (HEAD_ICON[title] ? '<i class="fas ' + HEAD_ICON[title] + '"></i>' : '') + '<span>' + esc(title) + '</span></h1>' + (sub ? '<p class="muted">' + sub + '</p>' : '') + '</div><div class="head-actions">' + (actions || '') + '</div></div>';
   const skeleton = () => '<div class="skeleton-wrap"><div class="skeleton sk-h"></div><div class="cards"><div class="skeleton sk-c"></div><div class="skeleton sk-c"></div><div class="skeleton sk-c"></div></div><div class="skeleton sk-b"></div></div>';
-  const yearSelect = () => '<label class="inline-field"><span>ปีงบประมาณ</span><select data-change="year">' + App.years().map(y => '<option' + (y === S.year ? ' selected' : '') + '>' + y + '</option>').join('') + '</select></label>';
+  const yearSelect = () => '<label class="inline-field"><span>ปีงบประมาณ</span><select data-change="year">' + App.years().map(y => '<option' + (String(y) === String(S.year) ? ' selected' : '') + '>' + y + '</option>').join('') + '</select></label>';
   App.skeleton = skeleton; App.pageHead = pageHead;
 
   document.addEventListener('change', e => {
@@ -29,7 +31,7 @@
     view.innerHTML = skeleton();
     const d = await App.api('dashboard', { year: S.year, scope: S.scope || 'hospital' });
     const T = d.totals, C = d.completeness;
-    const kpi = (label, val, sub, cls) => '<div class="card kpi ' + (cls || '') + '"><span class="kpi-label">' + label + '</span><b class="kpi-val">' + val + '</b><span class="kpi-sub">' + (sub || '') + '</span></div>';
+    const kpi = (label, val, sub, cls, ico) => '<div class="card kpi ' + (cls || '') + '"><div class="kpi-text"><span class="kpi-label">' + label + '</span><b class="kpi-val">' + val + '</b><span class="kpi-sub">' + (sub || '') + '</span></div><div class="icon-box"><i class="fas ' + (ico || 'fa-layer-group') + '"></i></div></div>';
     const alerts = [];
     if (d.overdue.count) alerts.push('<a class="alert warn" href="#/overdue"><b>' + d.overdue.count + '</b> แผนค้างส่งสรุปโครงการ <span>ดูรายการ →</span></a>');
     if (d.pendingUsers) alerts.push('<a class="alert info" href="#/admin/users"><b>' + d.pendingUsers + '</b> ผู้ใช้รออนุมัติ <span>อนุมัติ →</span></a>');
@@ -40,11 +42,11 @@
         yearSelect() + '<label class="inline-field"><span>ขอบเขต</span><select data-change="scope"><option value="hospital"' + (d.scope === 'hospital' ? ' selected' : '') + '>เฉพาะ รพ.</option><option value="all"' + (d.scope === 'all' ? ' selected' : '') + '>ทุกแหล่งเงิน</option></select></label>') +
       (alerts.length ? '<div class="alerts">' + alerts.join('') + '</div>' : '') +
       '<div class="cards kpis">' +
-        kpi('งบตามแผน', App.money(T.plannedBudget, 0), T.plans + ' แผนงาน') +
-        kpi('งบที่ใช้จริง', App.money(T.activeBudget, 0), 'ไม่นับกิจกรรมยกเลิก/ไม่เบิก') +
-        kpi('เบิกจ่ายสุทธิ', App.money(T.netPaid, 0), 'คงเหลือ ' + App.money(T.remaining, 0), 'accent') +
-        kpi('อัตราเบิกจ่าย', App.pct(T.rate) + App.progress(T.rate), d.settings.excludeCancelled ? 'ไม่นับงบกิจกรรมยกเลิก (รวม: ' + App.pct(T.rateGross) + ')' : 'นับงบทั้งหมด (ไม่รวมยกเลิก: ' + App.pct(T.rateNet) + ')') +
-        kpi('งบที่ปลดล็อกได้', App.money(T.released, 0), 'จากกิจกรรมยกเลิก/ไม่เบิก — พิจารณาโอนย้าย', 'warn') +
+        kpi('งบตามแผน', App.money(T.plannedBudget, 0), T.plans + ' แผนงาน', '', 'fa-layer-group') +
+        kpi('งบที่ใช้จริง', App.money(T.activeBudget, 0), 'ไม่นับกิจกรรมยกเลิก/ไม่เบิก', '', 'fa-wallet') +
+        kpi('เบิกจ่ายสุทธิ', App.money(T.netPaid, 0), 'คงเหลือ ' + App.money(T.remaining, 0), 'accent', 'fa-money-bill-wave') +
+        kpi('อัตราเบิกจ่าย', App.pct(T.rate) + App.progress(T.rate), d.settings.excludeCancelled ? 'ไม่นับงบกิจกรรมยกเลิก (รวม: ' + App.pct(T.rateGross) + ')' : 'นับงบทั้งหมด (ไม่รวมยกเลิก: ' + App.pct(T.rateNet) + ')', '', 'fa-chart-pie') +
+        kpi('งบที่ปลดล็อกได้', App.money(T.released, 0), 'จากกิจกรรมยกเลิก/ไม่เบิก — พิจารณาโอนย้าย', 'warn', 'fa-unlock') +
       '</div>' +
       '<div class="grid2"><section class="card"><h2>กระแสเงินสดรายเดือน (ต.ค. → ก.ย.)</h2><div class="chart-box"><canvas id="ch-monthly"></canvas></div>' +
         '<p class="muted small">งบตามแผนนับตามวันเริ่มกิจกรรม · ยังไม่มีวันที่: ' + App.money(d.monthly.plannedNoDate, 0) + ' บาท · เบิกจ่ายยังไม่มีวันที่: ' + App.money(d.monthly.paidNoDate, 0) + ' บาท</p></section>' +
@@ -52,7 +54,7 @@
       '<div class="grid2"><section class="card"><h2>งบรายแหล่งเงิน</h2><div class="chart-box"><canvas id="ch-fund"></canvas></div></section>' +
       '<section class="card"><div class="card-head"><h2>ตามยุทธศาสตร์</h2><select data-change="stratLevel" class="compact"><option value="mission">พันธกิจ สสจ.</option><option value="prov">ยุทธศาสตร์ สสจ.</option><option value="moph">ยุทธศาสตร์กระทรวง</option><option value="hosp">ยุทธศาสตร์ รพ.</option></select></div><div class="chart-box"><canvas id="ch-strat"></canvas></div></section></div>' +
       '<div class="grid2"><section class="card"><h2>แผนงบสูงสุด</h2>' + (d.topPlans.length ? '<table class="table"><tbody>' + d.topPlans.map(p => '<tr><td><a href="#/plan/' + esc(p.planId) + '">' + esc(p.name) + '</a><div class="muted small">' + esc(p.owner) + ' · ' + esc(App.fundName(p.fund)) + '</div></td><td class="num">' + App.money(p.activeBudget, 0) + '<div class="muted small">' + App.pct(p.pct) + '</div></td></tr>').join('') + '</tbody></table>' : '<p class="muted">ไม่มีข้อมูล</p>') + '</section>' +
-      '<section class="card"><div class="card-head"><h2>ค้างส่งสรุปโครงการ</h2><a href="#/overdue" class="link">ทั้งหมด (' + d.overdue.count + ')</a></div>' + (d.overdue.items.length ? '<table class="table"><tbody>' + d.overdue.items.map(p => '<tr><td><a href="#/plan/' + esc(p.planId) + '">' + esc(p.name) + '</a><div class="muted small">' + esc(p.owner) + ' — ' + esc(p.reason) + '</div></td><td class="num">' + (p.daysLate ? p.daysLate + ' วัน' : '') + '</td></tr>').join('') + '</tbody></table>' : '<p class="muted">ไม่มีรายการค้าง 🎉</p>') + '</section></div>' +
+      '<section class="card"><div class="card-head"><h2>ค้างส่งสรุปโครงการ</h2><a href="#/overdue" class="link">ทั้งหมด (' + d.overdue.count + ')</a></div>' + (d.overdue.items.length ? '<table class="table"><tbody>' + d.overdue.items.map(p => '<tr><td><a href="#/plan/' + esc(p.planId) + '">' + esc(p.name) + '</a><div class="muted small">' + esc(p.owner) + ' — ' + esc(p.reason) + '</div></td><td class="num">' + (p.daysLate ? p.daysLate + ' วัน' : '') + '</td></tr>').join('') + '</tbody></table>' : '<p class="muted">ไม่มีรายการค้าง</p>') + '</section></div>' +
       '<section class="card"><h2>ความครบถ้วนของข้อมูล</h2><div class="completeness">' +
         '<div><b>' + C.plansNoStrategy + '/' + C.hospPlans + '</b><span>แผนที่ยังกรอกยุทธศาสตร์ไม่ครบ 4 ระดับ</span></div>' +
         '<div><b>' + C.plansNoType + '</b><span>แผนที่ยังไม่ระบุประเภท</span></div>' +
@@ -90,7 +92,7 @@
     const f = PF();
     const opt = (list, cur) => list.map(o => { const v = typeof o === 'object' ? o.v : o, l = typeof o === 'object' ? o.l : o; return '<option value="' + esc(v) + '"' + (v === cur ? ' selected' : '') + '>' + esc(l) + '</option>'; }).join('');
     view.innerHTML = pageHead('แผนงาน/โครงการ', 'ปีงบประมาณ ' + esc(S.year) + ' · <span id="plan-count"></span>',
-      yearSelect() + '<button class="btn ghost" data-act="exportCsv">⬇ CSV</button>' + (App.can() ? '<button class="btn primary" data-act="newPlan">＋ เพิ่มแผนงาน</button>' : '')) +
+      yearSelect() + '<button class="btn ghost" data-act="exportCsv"><i class="fas fa-download"></i> CSV</button>' + (App.can() ? '<button class="btn primary" data-act="newPlan"><i class="fas fa-plus"></i> เพิ่มแผนงาน</button>' : '')) +
       '<div class="card filters"><input type="search" id="pf-q" placeholder="ค้นหาชื่อแผน/ผู้รับผิดชอบ" value="' + esc(f.q) + '">' +
       '<select id="pf-fund"><option value="">ทุกแหล่งเงิน</option>' + opt(App.activeOpts('funds', 'Code', 'Name'), f.fund) + '</select>' +
       '<select id="pf-status"><option value="">ทุกสถานะแผน</option>' + opt(App.masters().enums.planStatuses || [], f.status) + '</select>' +
@@ -141,22 +143,22 @@
     const fund = App.fund(p.FundCode);
     const stratHtml = fund && fund.StrategySet === 'region' ? (p.StrategyRegion ? '<div><span class="muted">ยุทธศาสตร์ระดับเขต</span> ' + esc(p.StrategyRegion) + '</div>' : '') :
       strat('ยุทธศาสตร์กระทรวง', 'moph', p.StrategyMoph) + strat('พันธกิจ สสจ.', 'mission', p.StrategyMission) + strat('ยุทธศาสตร์ สสจ.', 'prov', p.StrategyProv) + strat('ยุทธศาสตร์ รพ.', 'hosp', p.StrategyHosp);
-    const kp = (l, v, cls) => '<div class="card kpi sm ' + (cls || '') + '"><span class="kpi-label">' + l + '</span><b class="kpi-val">' + v + '</b></div>';
+    const kp = (l, v, cls, ico) => '<div class="card kpi sm ' + (cls || '') + '"><div class="kpi-text"><span class="kpi-label">' + l + '</span><b class="kpi-val">' + v + '</b></div><div class="icon-box"><i class="fas ' + (ico || 'fa-coins') + '"></i></div></div>';
     view.innerHTML =
-      '<a href="#/plans" class="back">← กลับรายการแผนงาน</a>' +
+      '<a href="#/plans" class="back"><i class="fas fa-arrow-left"></i> กลับรายการแผนงาน</a>' +
       '<section class="card plan-head"><div class="ph-main"><div class="badges">' + '<span class="tag">' + esc(App.fundName(p.FundCode)) + '</span> ' + App.badge(p.Status) + ' ' + App.badge(c.execState) + (p.IsDeleted ? ' <span class="badge red">ถูกลบ</span>' : '') + '</div>' +
         '<h1>' + (p.Seq ? '<span class="muted">#' + esc(p.Seq) + '</span> ' : '') + esc(p.Name) + '</h1>' + (p.ProjectTitle ? '<p class="muted">โครงการ' + (p.ProjectNo ? ' ที่ ' + esc(p.ProjectNo) : '') + ': ' + esc(p.ProjectTitle) + '</p>' : '') +
         '<div class="meta"><div><span class="muted">ผู้รับผิดชอบ</span> ' + esc(p.Owner) + '</div><div><span class="muted">กลุ่มงาน</span> ' + esc(p.Department || '-') + '</div><div><span class="muted">ประเภทแผน</span> ' + esc(App.lookup('planTypes', p.PlanType) || '-') + '</div>' +
         (p.ReturnDate ? '<div><span class="muted">ส่งคืนแผนเมื่อ</span> ' + App.date(p.ReturnDate) + '</div>' : '') + '</div><div class="meta strat">' + stratHtml + '</div>' + (p.Note ? '<p class="note">📝 ' + esc(p.Note) + '</p>' : '') + '</div>' +
-        '<div class="ph-actions">' + (edit ? '<button class="btn" data-act="editPlan">✎ แก้ไขแผน</button>' + '<button class="btn" data-act="summary">' + (p.SummarySent ? '✔ ส่งสรุปแล้ว ' + App.date(p.SummarySentDate) : '📄 ส่งสรุปโครงการ') + '</button>' : (p.SummarySent ? '<span class="badge green">ส่งสรุปแล้ว ' + App.date(p.SummarySentDate) + '</span>' : '')) +
+        '<div class="ph-actions">' + (edit ? '<button class="btn" data-act="editPlan"><i class="fas fa-pen"></i> แก้ไขแผน</button>' + '<button class="btn" data-act="summary">' + (p.SummarySent ? '✔ ส่งสรุปแล้ว ' + App.date(p.SummarySentDate) : '📄 ส่งสรุปโครงการ') + '</button>' : (p.SummarySent ? '<span class="badge green">ส่งสรุปแล้ว ' + App.date(p.SummarySentDate) + '</span>' : '')) +
         (p.SummaryFileUrl && safeUrl(p.SummaryFileUrl) ? '<a class="btn ghost" target="_blank" rel="noopener" href="' + esc(safeUrl(p.SummaryFileUrl)) + '">เปิดไฟล์สรุป</a>' : '') +
-        '<button class="btn ghost" data-act="history">🕘 ประวัติการแก้ไข</button>' + (edit ? '<button class="btn ghost" data-act="dupPlanOne">⧉ คัดลอกไปปีงบใหม่</button>' : '') +
-        (App.isAdmin() ? (p.IsDeleted ? '<button class="btn" data-act="restorePlan">กู้คืน</button>' : '<button class="btn danger ghost" data-act="deletePlan">🗑 ลบแผน</button>') : '') + '</div></section>' +
+        '<button class="btn ghost" data-act="history"><i class="fas fa-clock-rotate-left"></i> ประวัติการแก้ไข</button>' + (edit ? '<button class="btn ghost" data-act="dupPlanOne">⧉ คัดลอกไปปีงบใหม่</button>' : '') +
+        (App.isAdmin() ? (p.IsDeleted ? '<button class="btn" data-act="restorePlan">กู้คืน</button>' : '<button class="btn danger ghost" data-act="deletePlan"><i class="fas fa-trash"></i> ลบแผน</button>') : '') + '</div></section>' +
       (g.locked ? '<div class="alert warn"><b>🔒 แผนนี้อยู่ในสถานะ "ปิด"</b> ' + (App.isAdmin() ? 'แอดมินยังแก้ไขได้' : 'แก้ไขได้เฉพาะแอดมิน — ติดต่อแอดมินหากต้องการเปิดแก้ไข') + '</div>' : '') +
       (edit && g.reasonRequired ? '<div class="alert info">แผนนี้อนุมัติแล้ว — การแก้ไขงบ/สถานะ/ลบรายการ ต้องระบุเหตุผล และจะถูกบันทึกในประวัติการแก้ไข</div>' : '') +
       (g.overdue.is ? '<div class="alert warn"><b>ค้างส่งสรุปโครงการ</b> ' + esc(g.overdue.reason) + '</div>' : '') +
-      '<div class="cards kpis">' + kp('งบตามแผน', App.money(c.plannedBudget, 0)) + kp('งบที่ใช้จริง', App.money(c.activeBudget, 0)) + kp('เบิกจ่ายสุทธิ', App.money(c.netPaid, 0), 'accent') + kp('คงเหลือ', App.money(c.remaining, 0)) + kp('ปลดล็อกได้', App.money(c.released, 0), c.released ? 'warn' : '') + kp('ร้อยละ', App.pct(c.pct) + App.progress(c.pct)) + '</div>' +
-      '<div class="section-head"><h2>กิจกรรม (' + g.activities.length + ')</h2>' + (edit ? '<button class="btn primary" data-act="newAct">＋ เพิ่มกิจกรรม</button>' : '') + '</div>' +
+      '<div class="cards kpis">' + kp('งบตามแผน', App.money(c.plannedBudget, 0), '', 'fa-layer-group') + kp('งบที่ใช้จริง', App.money(c.activeBudget, 0), '', 'fa-wallet') + kp('เบิกจ่ายสุทธิ', App.money(c.netPaid, 0), 'accent', 'fa-money-bill-wave') + kp('คงเหลือ', App.money(c.remaining, 0), '', 'fa-piggy-bank') + kp('ปลดล็อกได้', App.money(c.released, 0), c.released ? 'warn' : '', 'fa-unlock') + kp('ร้อยละ', App.pct(c.pct) + App.progress(c.pct), '', 'fa-chart-pie') + '</div>' +
+      '<div class="section-head"><h2>กิจกรรม (' + g.activities.length + ')</h2>' + (edit ? '<button class="btn primary" data-act="newAct"><i class="fas fa-plus"></i> เพิ่มกิจกรรม</button>' : '') + '</div>' +
       (g.activities.length ? g.activities.map(a => actCard(a, edit, g.activities.length <= 5)).join('') : '<div class="card empty">ยังไม่มีกิจกรรม' + (edit ? ' — กด "เพิ่มกิจกรรม" เพื่อเริ่มวางงบ' : '') + '</div>') +
       deletedPanel(g, edit) + planLevel(g, edit);
   };
@@ -170,24 +172,24 @@
   function actCard(a, edit, open) {
     const ac = a.act, c = a.calc;
     const lines = a.lines.length ? '<table class="table slim"><thead><tr><th>หมวด</th><th>รายละเอียด</th><th class="num">จำนวน</th></tr></thead><tbody>' + a.lines.map(l => '<tr><td>' + esc(App.catName(l.CategoryCode)) + '</td><td class="muted">' + esc(l.Detail) + '</td><td class="num">' + App.money(l.Amount) + '</td></tr>').join('') + '<tr class="sum"><td colspan="2">รวมงบตามแผน</td><td class="num">' + App.money(c.budget) + '</td></tr></tbody></table>' : '<p class="muted small">ไม่มีรายการงบ</p>';
-    const disb = '<div class="sub-head"><h4>การเบิกจ่ายรายครั้ง</h4>' + (edit ? '<button class="btn sm" data-act="newDisb" data-id="' + esc(ac.ActId) + '">＋ บันทึกเบิก</button>' : '') + '</div>' +
+    const disb = '<div class="sub-head"><h4>การเบิกจ่ายรายครั้ง</h4>' + (edit ? '<button class="btn sm" data-act="newDisb" data-id="' + esc(ac.ActId) + '"><i class="fas fa-plus"></i> บันทึกเบิก</button>' : '') + '</div>' +
       (a.disbs.length ? '<div class="table-wrap"><table class="table slim"><thead><tr><th>ครั้งที่</th><th>ขออนุมัติ</th><th>ขอจ่าย</th><th>จ่ายจริง</th><th class="num">จำนวน</th><th>หลักฐาน</th><th></th></tr></thead><tbody>' + a.disbs.map(d =>
         '<tr><td>' + d.Seq + '</td><td>' + App.date(d.ApproveDate) + '</td><td>' + App.date(d.PayRequestDate) + '</td><td>' + App.date(d.PaidDate) + '</td><td class="num">' + App.money(d.Amount) + '</td><td>' +
         (safeUrl(d.EvidenceUrl) ? '<a target="_blank" rel="noopener" href="' + esc(safeUrl(d.EvidenceUrl)) + '">เปิดไฟล์</a>' : '<span class="muted">—</span>') + (d.Note ? '<div class="muted small">' + esc(d.Note) + '</div>' : '') + '</td><td class="act-cell">' +
-        (edit ? '<button class="icon-btn" title="แก้ไข" data-act="editDisb" data-id="' + esc(d.DisbId) + '">✎</button><button class="icon-btn" title="ลบ" data-act="delDisb" data-id="' + esc(d.DisbId) + '">🗑</button>' : '') + '</td></tr>').join('') + '</tbody></table></div>' : '<p class="muted small">ยังไม่มีการเบิกจ่าย</p>');
-    const adj = (a.adjs.length || edit) ? '<div class="sub-head"><h4>ปรับงบ / คืนเงิน</h4>' + (edit ? '<button class="btn sm ghost" data-act="newAdj" data-id="' + esc(ac.ActId) + '">＋ เพิ่ม</button>' : '') + '</div>' +
-      (a.adjs.length ? '<table class="table slim"><tbody>' + a.adjs.map(j => '<tr><td>' + App.badge(j.Type, j.Type === 'ปรับเพิ่มงบ' ? 'green' : (j.Type === 'คืนเงิน' ? 'blue' : 'amber')) + '</td><td>' + App.date(j.Date) + '</td><td>' + esc(j.Reason) + '</td><td class="num">' + App.money(j.Amount) + '</td><td class="act-cell">' + (edit ? (j.TransferId ? '<span class="badge gray" title="รายการโอนย้ายงบ แก้ไขไม่ได้ — ลบแล้วโอนใหม่">โอนย้าย</span>' : '<button class="icon-btn" data-act="editAdj" data-id="' + esc(j.AdjId) + '">✎</button>') + '<button class="icon-btn" data-act="delAdj" data-id="' + esc(j.AdjId) + '" title="' + (j.TransferId ? 'ยกเลิกการโอนย้าย' : 'ลบ') + '">🗑</button>' : '') + '</td></tr>').join('') + '</tbody></table>' : '') : '';
+        (edit ? '<button class="icon-btn" title="แก้ไข" data-act="editDisb" data-id="' + esc(d.DisbId) + '"><i class="fas fa-pen"></i></button><button class="icon-btn" title="ลบ" data-act="delDisb" data-id="' + esc(d.DisbId) + '"><i class="fas fa-trash"></i></button>' : '') + '</td></tr>').join('') + '</tbody></table></div>' : '<p class="muted small">ยังไม่มีการเบิกจ่าย</p>');
+    const adj = (a.adjs.length || edit) ? '<div class="sub-head"><h4>ปรับงบ / คืนเงิน</h4>' + (edit ? '<button class="btn sm ghost" data-act="newAdj" data-id="' + esc(ac.ActId) + '"><i class="fas fa-plus"></i> เพิ่ม</button>' : '') + '</div>' +
+      (a.adjs.length ? '<table class="table slim"><tbody>' + a.adjs.map(j => '<tr><td>' + App.badge(j.Type, j.Type === 'ปรับเพิ่มงบ' ? 'green' : (j.Type === 'คืนเงิน' ? 'blue' : 'amber')) + '</td><td>' + App.date(j.Date) + '</td><td>' + esc(j.Reason) + '</td><td class="num">' + App.money(j.Amount) + '</td><td class="act-cell">' + (edit ? (j.TransferId ? '<span class="badge gray" title="รายการโอนย้ายงบ แก้ไขไม่ได้ — ลบแล้วโอนใหม่">โอนย้าย</span>' : '<button class="icon-btn" data-act="editAdj" data-id="' + esc(j.AdjId) + '"><i class="fas fa-pen"></i></button>') + '<button class="icon-btn" data-act="delAdj" data-id="' + esc(j.AdjId) + '" title="' + (j.TransferId ? 'ยกเลิกการโอนย้าย' : 'ลบ') + '"><i class="fas fa-trash"></i></button>' : '') + '</td></tr>').join('') + '</tbody></table>' : '') : '';
     return '<details class="card act' + (c.excluded ? ' excluded' : '') + '" id="act-' + esc(ac.ActId) + '"' + (open ? ' open' : '') + '><summary><div class="act-title"><b>' + esc(ac.No) + '</b> ' + esc(ac.Name) + ' ' + App.badge(ac.Status) +
       '<div class="muted small">' + (ac.PlanStart ? App.date(ac.PlanStart) + (ac.PlanEnd && ac.PlanEnd !== ac.PlanStart ? ' – ' + App.date(ac.PlanEnd) : '') : '<span class="warn-text">ยังไม่ระบุวันที่</span>') + (ac.Note ? ' · ' + esc(ac.Note) : '') + '</div></div>' +
       '<div class="act-nums"><span>งบ <b>' + App.money(c.plannedBudget, 0) + '</b></span><span>เบิก <b>' + App.money(c.netPaid, 0) + '</b></span><span>คงเหลือ <b>' + App.money(c.remaining, 0) + '</b></span></div></summary>' +
-      '<div class="act-body">' + App.progress(c.pct) + lines + disb + adj + (edit ? '<div class="act-tools"><button class="btn sm" data-act="editAct" data-id="' + esc(ac.ActId) + '">✎ แก้ไขกิจกรรม/งบ</button><button class="btn sm" data-act="transferBudget" data-id="' + esc(ac.ActId) + '" title="โอนย้ายงบไปกิจกรรมอื่น">⇄ โอนย้ายงบ</button><button class="btn sm ghost" data-act="dupAct" data-id="' + esc(ac.ActId) + '">⧉ คัดลอก</button><button class="btn sm ghost" data-act="moveAct" data-id="' + esc(ac.ActId) + '">↪ ย้ายไปแผนอื่น</button><button class="btn sm ghost" data-act="actUp" data-id="' + esc(ac.ActId) + '" aria-label="เลื่อนขึ้น">▲</button><button class="btn sm ghost" data-act="actDown" data-id="' + esc(ac.ActId) + '" aria-label="เลื่อนลง">▼</button><button class="btn sm danger ghost" data-act="delAct" data-id="' + esc(ac.ActId) + '">ลบกิจกรรม</button></div>' : '') + '</div></details>';
+      '<div class="act-body">' + App.progress(c.pct) + lines + disb + adj + (edit ? '<div class="act-tools"><button class="btn sm" data-act="editAct" data-id="' + esc(ac.ActId) + '"><i class="fas fa-pen"></i> แก้ไขกิจกรรม/งบ</button><button class="btn sm" data-act="transferBudget" data-id="' + esc(ac.ActId) + '" title="โอนย้ายงบไปกิจกรรมอื่น">⇄ โอนย้ายงบ</button><button class="btn sm ghost" data-act="dupAct" data-id="' + esc(ac.ActId) + '">⧉ คัดลอก</button><button class="btn sm ghost" data-act="moveAct" data-id="' + esc(ac.ActId) + '">↪ ย้ายไปแผนอื่น</button><button class="btn sm ghost" data-act="actUp" data-id="' + esc(ac.ActId) + '" aria-label="เลื่อนขึ้น">▲</button><button class="btn sm ghost" data-act="actDown" data-id="' + esc(ac.ActId) + '" aria-label="เลื่อนลง">▼</button><button class="btn sm danger ghost" data-act="delAct" data-id="' + esc(ac.ActId) + '">ลบกิจกรรม</button></div>' : '') + '</div></details>';
   }
   function planLevel(g, edit) {
     const pd = g.planDisbs || [];
     let h = '';
-    if (pd.length) h += '<section class="card"><h3>เบิกจ่ายระดับแผน (ไม่ผูกกับกิจกรรม)</h3><table class="table slim"><tbody>' + pd.map(d => '<tr><td>' + App.date(d.PayRequestDate || d.ApproveDate) + '</td><td>' + esc(d.Note) + '</td><td class="num">' + App.money(d.Amount) + '</td><td class="act-cell">' + (edit ? '<button class="icon-btn" data-act="editDisb" data-id="' + esc(d.DisbId) + '">✎</button><button class="icon-btn" data-act="delDisb" data-id="' + esc(d.DisbId) + '">🗑</button>' : '') + '</td></tr>').join('') + '</tbody></table></section>';
-    if (g.planAdjs.length || edit) h += '<section class="card"><div class="sub-head"><h3>ปรับงบ/คืนเงินระดับแผน</h3>' + (edit ? '<button class="btn sm ghost" data-act="newAdj" data-id="">＋ เพิ่ม</button>' : '') + '</div>' +
-      (g.planAdjs.length ? '<table class="table slim"><tbody>' + g.planAdjs.map(j => '<tr><td>' + App.badge(j.Type, 'amber') + '</td><td>' + App.date(j.Date) + '</td><td>' + esc(j.Reason) + '</td><td class="num">' + App.money(j.Amount) + '</td><td class="act-cell">' + (edit ? '<button class="icon-btn" data-act="editAdj" data-id="' + esc(j.AdjId) + '">✎</button><button class="icon-btn" data-act="delAdj" data-id="' + esc(j.AdjId) + '">🗑</button>' : '') + '</td></tr>').join('') + '</tbody></table>' : '<p class="muted small">ไม่มี</p>') + '</section>';
+    if (pd.length) h += '<section class="card"><h3>เบิกจ่ายระดับแผน (ไม่ผูกกับกิจกรรม)</h3><table class="table slim"><tbody>' + pd.map(d => '<tr><td>' + App.date(d.PayRequestDate || d.ApproveDate) + '</td><td>' + esc(d.Note) + '</td><td class="num">' + App.money(d.Amount) + '</td><td class="act-cell">' + (edit ? '<button class="icon-btn" data-act="editDisb" data-id="' + esc(d.DisbId) + '"><i class="fas fa-pen"></i></button><button class="icon-btn" data-act="delDisb" data-id="' + esc(d.DisbId) + '"><i class="fas fa-trash"></i></button>' : '') + '</td></tr>').join('') + '</tbody></table></section>';
+    if (g.planAdjs.length || edit) h += '<section class="card"><div class="sub-head"><h3>ปรับงบ/คืนเงินระดับแผน</h3>' + (edit ? '<button class="btn sm ghost" data-act="newAdj" data-id=""><i class="fas fa-plus"></i> เพิ่ม</button>' : '') + '</div>' +
+      (g.planAdjs.length ? '<table class="table slim"><tbody>' + g.planAdjs.map(j => '<tr><td>' + App.badge(j.Type, 'amber') + '</td><td>' + App.date(j.Date) + '</td><td>' + esc(j.Reason) + '</td><td class="num">' + App.money(j.Amount) + '</td><td class="act-cell">' + (edit ? '<button class="icon-btn" data-act="editAdj" data-id="' + esc(j.AdjId) + '"><i class="fas fa-pen"></i></button><button class="icon-btn" data-act="delAdj" data-id="' + esc(j.AdjId) + '"><i class="fas fa-trash"></i></button>' : '') + '</td></tr>').join('') + '</tbody></table>' : '<p class="muted small">ไม่มี</p>') + '</section>';
     return h;
   }
   const findAct = id => (S.cur.activities.find(a => a.act.ActId === id) || {});
@@ -261,7 +263,7 @@
     const html = '<div class="form-grid">' + App.field({ name: 'No', label: 'เลขที่กิจกรรม', value: ac.No || '', hint: 'เช่น 1.1 (เว้นว่าง = อัตโนมัติ)' }) + App.field({ name: 'Status', label: 'สถานะกิจกรรม', type: 'select', noBlank: true, options: App.masters().enums.actStatuses, value: ac.Status }) +
       App.field({ name: 'Name', label: 'ชื่อกิจกรรม', value: ac.Name || '', required: true, full: true }) + App.field({ name: 'PlanStart', label: 'วันที่เริ่ม', type: 'date', value: ac.PlanStart || '' }) + App.field({ name: 'PlanEnd', label: 'วันที่สิ้นสุด', type: 'date', value: ac.PlanEnd || '' }) +
       App.field({ name: 'Note', label: 'หมายเหตุ', value: ac.Note || '', full: true }) + '</div><h4 class="mt">รายการงบประมาณ</h4><div id="lines">' + (lines.length ? lines : [{}]).map(lineRow).join('') + '</div>' +
-      '<div class="line-foot"><button type="button" class="btn sm ghost" id="add-line">＋ เพิ่มรายการ</button><b>รวม <span id="line-total">0.00</span> บาท</b></div><p class="muted small">สถานะ "ยกเลิก / ไม่เบิก / ไม่ใช้งบประมาณ" จะไม่นับงบกิจกรรมนี้เป็นงบที่ใช้จริง (ถือเป็นงบที่ปลดล็อกได้)</p>';
+      '<div class="line-foot"><button type="button" class="btn sm ghost" id="add-line"><i class="fas fa-plus"></i> เพิ่มรายการ</button><b>รวม <span id="line-total">0.00</span> บาท</b></div><p class="muted small">สถานะ "ยกเลิก / ไม่เบิก / ไม่ใช้งบประมาณ" จะไม่นับงบกิจกรรมนี้เป็นงบที่ใช้จริง (ถือเป็นงบที่ปลดล็อกได้)</p>';
     App.modal({ title: isNew ? 'เพิ่มกิจกรรม' : 'แก้ไขกิจกรรม', html: html, wide: true,
       onOpen: d => {
         const box = d.querySelector('#lines'), tot = () => { let s = 0; $$('[name=amt]', box).forEach(i => { s += Number(i.value) || 0; }); d.querySelector('#line-total').textContent = App.money(s); };
@@ -413,7 +415,7 @@
     const bar = $('#bulk-bar'); if (!bar) return;
     const n = S.sel ? S.sel.size : 0;
     bar.hidden = n === 0;
-    bar.innerHTML = '<b>เลือก ' + n + ' แผน</b><button class="btn sm" data-act="bulkEdit">✎ แก้ไขพร้อมกัน</button><button class="btn sm" data-act="bulkDup">⧉ คัดลอก/ยกไปปีงบใหม่</button><button class="btn sm ghost" data-act="bulkClear">ล้างที่เลือก</button>';
+    bar.innerHTML = '<b>เลือก ' + n + ' แผน</b><button class="btn sm" data-act="bulkEdit"><i class="fas fa-pen"></i> แก้ไขพร้อมกัน</button><button class="btn sm" data-act="bulkDup">⧉ คัดลอก/ยกไปปีงบใหม่</button><button class="btn sm ghost" data-act="bulkClear">ล้างที่เลือก</button>';
     const all = $('#sel-all'); if (all) { const rows = S.planRows || []; all.checked = rows.length > 0 && rows.every(x => S.sel.has(x.plan.PlanId)); }
   };
   document.addEventListener('change', e => {

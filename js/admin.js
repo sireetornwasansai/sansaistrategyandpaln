@@ -31,7 +31,7 @@
     let h = '<button class="btn sm ghost" data-act="editUser"' + id + '>แก้ไข</button>';
     if (u.Status === 'approved' && !self) h += '<button class="btn sm ghost" data-act="suspendUser"' + id + '>ระงับ</button>';
     if ((u.Status === 'rejected' || u.Status === 'suspended')) h += '<button class="btn sm" data-act="approveUser"' + id + '>อนุมัติ/คืนสิทธิ์</button>';
-    if (!self) h += '<button class="icon-btn" title="ลบ" data-act="deleteUser"' + id + '>🗑</button>';
+    if (!self) h += '<button class="icon-btn" title="ลบ" data-act="deleteUser"' + id + '><i class="fas fa-trash"></i></button>';
     return h;
   }
   const userOf = email => S.users.find(u => u.Email === email);
@@ -73,9 +73,9 @@
     const sc = m.schema[key], rows = m.data[key], q = (S.masterQ || '').toLowerCase();
     const show = rows.filter(r => !q || JSON.stringify(r).toLowerCase().indexOf(q) >= 0);
     const cell = (c, v) => c.type === 'bool' ? (v ? '<span class="badge green">ใช้งาน</span>' : '<span class="badge gray">ปิด</span>') : esc(v);
-    $('#master-body').innerHTML = '<div class="card table-card"><div class="table-tools"><input type="search" id="mq" placeholder="ค้นหา…" value="' + esc(S.masterQ || '') + '"><span class="muted">' + show.length + '/' + rows.length + ' รายการ</span><button class="btn primary" data-act="addMaster" data-id="' + key + '">＋ เพิ่ม</button></div>' +
+    $('#master-body').innerHTML = '<div class="card table-card"><div class="table-tools"><input type="search" id="mq" placeholder="ค้นหา…" value="' + esc(S.masterQ || '') + '"><span class="muted">' + show.length + '/' + rows.length + ' รายการ</span><button class="btn primary" data-act="addMaster" data-id="' + key + '"><i class="fas fa-plus"></i> เพิ่ม</button></div>' +
       '<div class="table-wrap"><table class="table"><thead><tr>' + sc.cols.map(c => '<th>' + esc(c.label) + '</th>').join('') + '<th></th></tr></thead><tbody>' +
-      show.map(r => '<tr>' + sc.cols.map(c => '<td' + (c.type === 'number' ? ' class="num"' : '') + '>' + cell(c, r[c.name]) + '</td>').join('') + '<td class="act-cell"><button class="icon-btn" title="แก้ไข" data-act="editMaster" data-id="' + key + '" data-key="' + esc(r[sc.key]) + '">✎</button></td></tr>').join('') + '</tbody></table></div></div>';
+      show.map(r => '<tr>' + sc.cols.map(c => '<td' + (c.type === 'number' ? ' class="num"' : '') + '>' + cell(c, r[c.name]) + '</td>').join('') + '<td class="act-cell"><button class="icon-btn" title="แก้ไข" data-act="editMaster" data-id="' + key + '" data-key="' + esc(r[sc.key]) + '"><i class="fas fa-pen"></i></button></td></tr>').join('') + '</tbody></table></div></div>';
     $('#mq').addEventListener('input', App.debounce(e => { S.masterQ = e.target.value; drawMasterTable(m, key); const i = $('#mq'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }, 200));
   }
   function masterForm(key, row) {
@@ -126,7 +126,7 @@
     view.innerHTML = pageHead('รายงาน / ส่งออก', 'สร้างรายงานตามแหล่งเงินในรูปแบบใกล้เคียงชีท "สรุปแผนงาน+โครงการ" เดิม', '<label class="inline-field"><span>ปีงบประมาณ</span><select data-change="year">' + App.years().map(y => '<option' + (y === S.year ? ' selected' : '') + '>' + y + '</option>').join('') + '</select></label>') +
       '<div class="card"><h2>ส่งออกเป็นแท็บในชีตฐานข้อมูล</h2><p class="muted">สร้าง/อัปเดตแท็บ "รายงาน-&lt;แหล่งเงิน&gt;" ในชีตฐานข้อมูล (งบ เบิกจ่าย คงเหลือ ร้อยละ แยกรายหมวด) — แท็บเหล่านี้เป็นรายงานที่ระบบสร้างให้ ไม่ต้องกรอกข้อมูลในแท็บนี้</p>' +
       '<button class="btn primary" data-act="exportSheets">สร้างรายงานลงชีต</button><div id="export-result"></div></div>' +
-      '<div class="card"><h2>ส่งออก CSV</h2><p class="muted">ไปที่หน้า "แผนงาน/โครงการ" แล้วกดปุ่ม ⬇ CSV (ส่งออกตามตัวกรองที่เลือก)</p><a class="btn" href="#/plans">ไปหน้าแผนงาน</a></div>';
+      '<div class="card"><h2>ส่งออก CSV</h2><p class="muted">ไปที่หน้า "แผนงาน/โครงการ" แล้วกดปุ่ม <i class="fas fa-download"></i> CSV (ส่งออกตามตัวกรองที่เลือก)</p><a class="btn" href="#/plans">ไปหน้าแผนงาน</a></div>';
   };
   App.actions.exportSheets = async el => {
     el.disabled = true; el.textContent = 'กำลังสร้าง…';

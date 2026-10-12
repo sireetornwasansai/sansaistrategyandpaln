@@ -123,3 +123,11 @@ python3 -m http.server 3000   # แล้วเปิด http://localhost:3000 (
 1. วาง `backend/Code.gs` ใหม่ทับใน Apps Script → รันฟังก์ชัน `setupSheet()` **หนึ่งครั้ง** (สร้างชีต ChangeLog, เติมคอลัมน์ TransferId/PlanId, เพิ่มค่าตั้งต้นใหม่)
 2. Deploy → Manage deployments → ✎ → Version: **New version** → Deploy (URL เดิมใช้ต่อได้)
 3. Push ไฟล์ frontend ทั้งหมดขึ้น GitHub (`vercel.json`, `js/`, `assets/`) แล้ว Vercel จะ deploy ให้เอง
+
+
+---
+
+## อัปเดต v2.2 — รื้อ UI/UX ตาม template index.html
+- เปลี่ยน `assets/style.css` ทั้งไฟล์ + โครง `index.html` ให้เป็นสไตล์เดียวกับ template (sidebar เขียวไล่เฉด, เมนู active มีขอบซ้ายสีมิ้นท์, การ์ดโค้งมนเงาบาง, การ์ดสถิติมีไอคอน, หน้า Sign in แบบแบ่งสองฝั่ง)
+- ใช้ Font Awesome 6.4 (CDN) แทนอีโมจิ · ปรับเป็นธีมสว่างอย่างเดียว (ไม่มี dark mode) เพื่อให้สะอาดตา
+- **ไม่แตะ backend และ API** — แก้เฉพาะ `index.html`, `assets/style.css`, `js/main.js`, `js/pages.js`, `js/admin.js` (เฉพาะไอคอน/markup)
