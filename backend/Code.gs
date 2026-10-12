@@ -54,15 +54,18 @@ var SCHEMA_ = {
   BudgetLines:    ['LineId', 'ActId', 'PlanId', 'CategoryCode', 'Amount', 'Detail'],
   Disbursements:  ['DisbId', 'ActId', 'PlanId', 'Seq', 'ApproveDate', 'PayRequestDate', 'PaidDate', 'Amount', 'EvidenceUrl', 'Note', 'Source',
                    'CreatedAt', 'CreatedBy', 'UpdatedAt', 'UpdatedBy'],
-  Adjustments:    ['AdjId', 'PlanId', 'ActId', 'Type', 'Amount', 'Reason', 'Date', 'CreatedAt', 'CreatedBy'],
-  FixQueue:       ['FixId', 'Source', 'Ref', 'Issue', 'Detail', 'Resolved', 'ResolvedBy', 'ResolvedAt', 'CreatedAt'],
-  AuditLog:       ['Time', 'Email', 'Action', 'Entity', 'EntityId', 'Detail']
+  Adjustments:    ['AdjId', 'PlanId', 'ActId', 'Type', 'Amount', 'Reason', 'Date', 'CreatedAt', 'CreatedBy', 'TransferId'],
+  FixQueue:       ['FixId', 'Source', 'Ref', 'Issue', 'Detail', 'Resolved', 'ResolvedBy', 'ResolvedAt', 'CreatedAt', 'PlanId'],
+  AuditLog:       ['Time', 'Email', 'Action', 'Entity', 'EntityId', 'Detail'],
+  ChangeLog:      ['Time', 'Email', 'Entity', 'EntityId', 'PlanId', 'Field', 'Old', 'New', 'Reason']
 };
 
 // คอลัมน์ที่ต้องเก็บเป็น "ข้อความ" (กันชีตแปลงเป็นวันที่/ตัวเลขเอง) และคอลัมน์ตัวเลขเงิน
 var TEXT_COLS_ = ['PlanId', 'ActId', 'LineId', 'DisbId', 'AdjId', 'FixId', 'Code', 'MissionCode', 'Seq', 'No', 'ProjectNo', 'FundCode',
   'StrategyMoph', 'StrategyMission', 'StrategyProv', 'StrategyHosp', 'ReturnDate', 'SummarySentDate', 'PlanStart', 'PlanEnd',
-  'ApproveDate', 'PayRequestDate', 'PaidDate', 'Date', 'Year', 'Key', 'Value', 'CategoryCode'];
+  'ApproveDate', 'PayRequestDate', 'PaidDate', 'Date', 'Year', 'Key', 'Value', 'CategoryCode', 'TransferId',
+  'Time', 'CreatedAt', 'UpdatedAt', 'RequestedAt', 'ApprovedAt', 'LastLoginAt', 'ResolvedAt', 'Old', 'New'];
+var TIME_COLS_ = ['Time', 'CreatedAt', 'UpdatedAt', 'RequestedAt', 'ApprovedAt', 'LastLoginAt', 'ResolvedAt'];
 var MONEY_COLS_ = ['Amount'];
 
 var ROLES_ = ['viewer', 'user', 'admin'];
@@ -79,7 +82,9 @@ var DEFAULT_SETTINGS_ = [
   ['UserEditScope', 'all', 'all = เจ้าหน้าที่แก้ไขได้ทุกแผน | own = แก้ได้เฉพาะแผนที่ตนเองเป็นผู้รับผิดชอบ'],
   ['SummaryGraceDays', '30', 'จำนวนวันหลังกิจกรรมสุดท้ายสิ้นสุด ก่อนถือว่า "ค้างส่งสรุปโครงการ"'],
   ['FileSharing', 'link', 'link = แชร์ไฟล์หลักฐานแบบใครมีลิงก์เปิดดูได้ | private = ไม่แชร์'],
-  ['ImportLocked', 'FALSE', 'TRUE = ล็อกไม่ให้รัน runImport ซ้ำ (ตั้งเป็น TRUE อัตโนมัติหลังนำเข้าเสร็จ)']
+  ['ImportLocked', 'FALSE', 'TRUE = ล็อกไม่ให้รัน runImport ซ้ำ (ตั้งเป็น TRUE อัตโนมัติหลังนำเข้าเสร็จ)'],
+  ['RequireReasonAfterApproval', 'TRUE', 'TRUE = แผนที่อนุมัติแล้ว ต้องระบุเหตุผลทุกครั้งที่แก้งบ/สถานะ/ลบรายการ (บันทึกในประวัติการแก้ไข)'],
+  ['LockClosedPlans', 'TRUE', 'TRUE = แผนสถานะ "ปิด" แก้ไขได้เฉพาะแอดมิน']
 ];
 
 var DEFAULT_FUNDS_ = [
@@ -553,7 +558,15 @@ function readAll_(name) {
     var vals = sh.getRange(2, 1, last - 1, cols.length).getValues();
     for (var i = 0; i < vals.length; i++) {
       var row = vals[i], empty = true, o = { _row: i + 2 };
-      for (var c = 0; c < cols.length; c++) { o[cols[c]] = row[c]; if (row[c] !== '' && row[c] !== null) empty = false; }
+      for (var c = 0; c < cols.length; c++) {
+        var cell = row[c];
+        // กันชีตแปลงข้อความเวลา/วันที่เป็น Date เอง: คืนเป็นข้อความ ISO เสมอ
+        if (Object.prototype.toString.call(cell) === '[object Date]' && TEXT_COLS_.indexOf(cols[c]) >= 0 && !isNaN(cell.getTime())) {
+          cell = Utilities.formatDate(cell, TZ_, TIME_COLS_.indexOf(cols[c]) >= 0 ? "yyyy-MM-dd'T'HH:mm:ss" : 'yyyy-MM-dd');
+        }
+        o[cols[c]] = cell;
+        if (cell !== '' && cell !== null) empty = false;
+      }
       if (!empty) out.push(o);
     }
   }
@@ -872,7 +885,7 @@ function settingsSave_(admin, p) {
   var def = DEFAULT_SETTINGS_.filter(function (d) { return d[0] === key; })[0];
   if (!def) fail_('VALIDATION', 'ไม่รู้จักการตั้งค่า ' + key);
   if (key === 'CurrentYear' && !/^25\d\d$/.test(val)) fail_('VALIDATION', 'ปีงบประมาณต้องเป็น พ.ศ. 4 หลัก เช่น 2569');
-  if ((key === 'ExcludeCancelledFromRate' || key === 'ImportLocked') && ['TRUE', 'FALSE'].indexOf(val.toUpperCase()) < 0) fail_('VALIDATION', 'ค่าต้องเป็น TRUE หรือ FALSE');
+  if ((key === 'ExcludeCancelledFromRate' || key === 'ImportLocked' || key === 'RequireReasonAfterApproval' || key === 'LockClosedPlans') && ['TRUE', 'FALSE'].indexOf(val.toUpperCase()) < 0) fail_('VALIDATION', 'ค่าต้องเป็น TRUE หรือ FALSE');
   if (key === 'UserEditScope' && ['all', 'own'].indexOf(val) < 0) fail_('VALIDATION', 'ค่าต้องเป็น all หรือ own');
   if (key === 'FileSharing' && ['link', 'private'].indexOf(val) < 0) fail_('VALIDATION', 'ค่าต้องเป็น link หรือ private');
   if (key === 'SummaryGraceDays' && !(num_(val) >= 0)) fail_('VALIDATION', 'จำนวนวันต้องเป็นตัวเลข');
@@ -1047,7 +1060,11 @@ function plansGet_(user, p) {
   var brief = planBrief_(m);
   var planDisbs = readAll_('Disbursements').filter(function (d) { return d.PlanId === p.planId && !d.ActId; }).map(disbOut_);
   return { plan: brief.plan, calc: brief.calc, overdue: brief.overdue, activities: m.items.map(actFull_), planAdjs: m.planAdjs.map(adjOut_),
-    planDisbs: planDisbs, canEdit: canEditPlan_(user, pl) };
+    planDisbs: planDisbs,
+    canEdit: canEditPlan_(user, pl) && !(pl.Status === 'ปิด' && user.Role !== 'admin' && getSettings_().LockClosedPlans === 'TRUE'),
+    locked: pl.Status === 'ปิด' && getSettings_().LockClosedPlans === 'TRUE',
+    reasonRequired: reasonRequired_(pl),
+    deletedActivities: readAll_('Activities').filter(function (a) { return a.PlanId === p.planId && bool_(a.IsDeleted); }).map(function (a) { return { ActId: a.ActId, No: String(a.No), Name: a.Name }; }) };
 }
 
 function canEditPlan_(user, plan) {
@@ -1060,7 +1077,68 @@ function mustEditPlan_(user, planId) {
   var pl = findBy_('Plans', 'PlanId', planId);
   if (!pl || bool_(pl.IsDeleted)) fail_('NOT_FOUND', 'ไม่พบแผนงาน');
   if (!canEditPlan_(user, pl)) fail_('FORBIDDEN', 'ท่านแก้ไขได้เฉพาะแผนที่ตนเองเป็นผู้รับผิดชอบ');
+  if (pl.Status === 'ปิด' && user.Role !== 'admin' && getSettings_().LockClosedPlans === 'TRUE') fail_('LOCKED', 'แผนนี้อยู่ในสถานะ "ปิด" แก้ไขได้เฉพาะแอดมิน');
   return pl;
+}
+
+// ---------------------------------------------------------------------------------
+// การควบคุมการแก้ไข: เหตุผลหลังอนุมัติ / กันแก้ชนกัน / ประวัติการแก้ไขรายฟิลด์ (ChangeLog)
+// ---------------------------------------------------------------------------------
+var APPROVED_SET_ = ['อนุมัติ', 'ดำเนินการ', 'ส่งสรุปแล้ว'];
+function reasonRequired_(plan) {
+  return getSettings_().RequireReasonAfterApproval === 'TRUE' && APPROVED_SET_.indexOf(plan.Status) >= 0;
+}
+/** ถ้าแผน (ตัวใดตัวหนึ่ง) อนุมัติแล้ว ต้องมีเหตุผลอย่างน้อย 3 ตัวอักษร */
+function reasonOk_(plans, reason) {
+  var need = [].concat(plans).some(reasonRequired_), r = str_(reason);
+  if (need && r.length < 3) fail_('REASON_REQUIRED', 'กรุณาระบุเหตุผลการแก้ไข (แผนที่อนุมัติแล้วต้องมีเหตุผลทุกครั้งที่แก้งบ/สถานะ/ลบรายการ)');
+  return r;
+}
+/** ถ้าผู้ใช้ส่งเวลาแก้ไขล่าสุดที่เห็นมา (expectedUpdatedAt) แล้วข้อมูลถูกคนอื่นแก้ไปแล้ว -> ปฏิเสธ */
+function checkExpected_(row, expected, label) {
+  if (expected === undefined || expected === null || expected === '') return;
+  if (String(row.UpdatedAt) !== String(expected)) fail_('CONFLICT', label + 'นี้ถูกแก้ไขโดย ' + (row.UpdatedBy || 'ผู้อื่น') + ' เมื่อ ' + String(row.UpdatedAt).replace('T', ' ') + ' — กรุณาโหลดข้อมูลใหม่ก่อนแก้ไข');
+}
+var FIELD_LABELS_ = { Name: 'ชื่อ', Owner: 'ผู้รับผิดชอบ', Department: 'กลุ่มงาน', FundCode: 'แหล่งเงิน', Year: 'ปีงบประมาณ', Seq: 'ลำดับ', ProjectNo: 'เลขที่โครงการ', ProjectTitle: 'ชื่อโครงการ',
+  StrategyMoph: 'ยุทธศาสตร์กระทรวง', StrategyMission: 'พันธกิจ', StrategyProv: 'ยุทธศาสตร์ สสจ.', StrategyHosp: 'ยุทธศาสตร์ รพ.', StrategyRegion: 'ยุทธศาสตร์เขต',
+  PlanType: 'ประเภทแผน', Status: 'สถานะ', ReturnDate: 'วันส่งคืนแผน', Note: 'หมายเหตุ', No: 'เลขที่', PlanStart: 'วันเริ่ม', PlanEnd: 'วันสิ้นสุด', Amount: 'จำนวนเงิน',
+  ApproveDate: 'วันขออนุมัติ', PayRequestDate: 'วันขอจ่าย', PaidDate: 'วันจ่ายจริง', EvidenceUrl: 'หลักฐาน', SummarySent: 'ส่งสรุปโครงการ' };
+var PLAN_FIELDS_ = ['Name', 'Owner', 'Department', 'FundCode', 'Year', 'Seq', 'ProjectNo', 'ProjectTitle', 'StrategyMoph', 'StrategyMission', 'StrategyProv', 'StrategyHosp', 'StrategyRegion', 'PlanType', 'Status', 'ReturnDate', 'Note'];
+function chgVal_(v) {
+  if (v === true) return 'ใช่';
+  if (v === false) return 'ไม่';
+  if (Object.prototype.toString.call(v) === '[object Date]') return dstr_(v);
+  return String(v === null || v === undefined ? '' : v).substring(0, 250);
+}
+function chgRow_(user, entity, entityId, planId, field, oldV, newV, reason) {
+  return { Time: nowIso_(), Email: user.Email, Entity: entity, EntityId: entityId, PlanId: planId, Field: field, Old: chgVal_(oldV), New: chgVal_(newV), Reason: str_(reason).substring(0, 400) };
+}
+function diffRows_(user, entity, entityId, planId, prefix, oldObj, newObj, fields, reason) {
+  var rows = [];
+  fields.forEach(function (f) {
+    var a = chgVal_(oldObj[f]), b = chgVal_(newObj[f]);
+    if (a !== b) rows.push(chgRow_(user, entity, entityId, planId, (prefix || '') + (FIELD_LABELS_[f] || f), a, b, reason));
+  });
+  return rows;
+}
+function writeChanges_(rows) {
+  try { if (rows && rows.length) insertMany_('ChangeLog', rows); } catch (e) { /* ประวัติล้มเหลวต้องไม่ทำให้งานหลักพัง */ }
+}
+function catMap_() { var m = {}; readAll_('Categories').forEach(function (c) { m[c.Code] = c.Name; }); return m; }
+function linesSig_(lines) {
+  var acc = {};
+  (lines || []).forEach(function (l) { acc[l.CategoryCode] = round2_((acc[l.CategoryCode] || 0) + num_(l.Amount)); });
+  return Object.keys(acc).sort().map(function (k) { return k + ':' + acc[k]; }).join(';');
+}
+function linesText_(lines) {
+  var cm = catMap_(), acc = {};
+  (lines || []).forEach(function (l) { acc[l.CategoryCode] = round2_((acc[l.CategoryCode] || 0) + num_(l.Amount)); });
+  var t = Object.keys(acc).sort().map(function (k) { return String(cm[k] || k).substring(0, 24) + ' ' + acc[k]; }).join('; ');
+  return t || '(ไม่มี)';
+}
+function historyList_(user, p) {
+  var rows = readAll_('ChangeLog').filter(function (r) { return String(r.PlanId) === String(p.planId); });
+  return rows.slice(-300).reverse().map(function (r) { var o = stripRow_(r); o.Time = String(o.Time); return o; });
 }
 function validDate_(v, label) {
   if (v === undefined || v === null || v === '') return '';
@@ -1090,7 +1168,7 @@ function checkStrategies_(o, fund) {
 function plansSave_(user, p) {
   var d = p.plan || {};
   var isNew = !d.PlanId, old = null;
-  if (!isNew) { old = mustEditPlan_(user, d.PlanId); }
+  if (!isNew) { old = mustEditPlan_(user, d.PlanId); checkExpected_(old, p.expectedUpdatedAt, 'แผนงาน'); }
   else if (user.Role === 'viewer') fail_('FORBIDDEN', 'ท่านไม่มีสิทธิ์สร้างแผนงาน');
 
   var year = str_(d.Year !== undefined ? d.Year : (old && old.Year));
@@ -1118,10 +1196,105 @@ function plansSave_(user, p) {
   o.StrategyHosp = str_(pick('StrategyHosp')); o.StrategyRegion = str_(pick('StrategyRegion'));
   o.ReturnDate = validDate_(pick('ReturnDate'), 'วันส่งคืนแผน');
   checkStrategies_(o, fund);
+
+  // การแก้ที่กระทบงบ/สถานะสำคัญ ของแผนที่อนุมัติแล้ว ต้องมีเหตุผล
+  var reason = str_(p.reason);
+  if (!isNew) {
+    var sensitive = o.FundCode !== old.FundCode || o.Year !== String(old.Year) || (o.Status === 'ยกเลิก' && old.Status !== 'ยกเลิก') || (old.Status !== 'ร่าง' && o.Status === 'ร่าง');
+    if (sensitive) reason = reasonOk_(old, p.reason);
+  }
   o.UpdatedAt = now; o.UpdatedBy = user.Email;
   if (isNew) insert_('Plans', o); else update_('Plans', old._row, o);
+  if (isNew) writeChanges_([chgRow_(user, 'Plan', o.PlanId, o.PlanId, '(สร้างแผนงาน)', '', name, '')]);
+  else writeChanges_(diffRows_(user, 'Plan', o.PlanId, o.PlanId, '', old, o, PLAN_FIELDS_, reason));
   audit_(user.Email, isNew ? 'สร้างแผนงาน' : 'แก้ไขแผนงาน', 'Plan', o.PlanId, name);
-  return { planId: o.PlanId };
+  return { planId: o.PlanId, updatedAt: now };
+}
+
+/** แก้ไขหลายแผนพร้อมกัน: changes ใช้ '__keep__' = ไม่เปลี่ยน, '__clear__' = ล้างค่า */
+function plansBulk_(user, p) {
+  var ids = (p.planIds || []).slice(0, 200), ch = p.changes || {};
+  var allowed = ['Owner', 'Department', 'PlanType', 'Status', 'StrategyMoph', 'StrategyMission', 'StrategyProv', 'StrategyHosp', 'StrategyRegion', 'Note'];
+  var patch = {}, n = 0;
+  allowed.forEach(function (k) {
+    if (ch[k] === undefined || ch[k] === null || ch[k] === '__keep__') return;
+    patch[k] = ch[k] === '__clear__' ? '' : ch[k]; n++;
+  });
+  if (!ids.length) fail_('VALIDATION', 'ยังไม่ได้เลือกแผนงาน');
+  if (!n) fail_('VALIDATION', 'ยังไม่ได้เลือกฟิลด์ที่จะแก้ไข');
+  var done = 0, errors = [];
+  ids.forEach(function (id) {
+    try {
+      var pp = {}; for (var k in patch) pp[k] = patch[k];
+      pp.PlanId = id;
+      if (pp.StrategyMission !== undefined && pp.StrategyProv === undefined) {
+        var cur = findBy_('Plans', 'PlanId', id), pv = cur && cur.StrategyProv ? findBy_('StrategyProv', 'Code', cur.StrategyProv) : null;
+        if (pv && String(pv.MissionCode) !== String(pp.StrategyMission)) pp.StrategyProv = '';
+      }
+      plansSave_(user, { plan: pp, reason: p.reason });
+      done++;
+    } catch (e) {
+      var pl = findBy_('Plans', 'PlanId', id);
+      errors.push({ planId: id, name: pl ? pl.Name : id, error: e.message });
+    }
+  });
+  audit_(user.Email, 'แก้ไขหลายแผน', 'Plan', String(ids.length), 'สำเร็จ ' + done + ' / ' + ids.length + ' ฟิลด์: ' + Object.keys(patch).join(','));
+  return { updated: done, failed: errors.length, errors: errors };
+}
+
+function addYears_(iso, n) {
+  var m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return '';
+  var d = +m[3];
+  if (m[2] === '02' && d === 29) d = 28;
+  return (+m[1] + n) + '-' + m[2] + '-' + ('0' + d).slice(-2);
+}
+
+/** คัดลอกแผน / ยกแผนไปปีงบประมาณใหม่ (คัดลอกกิจกรรมและรายการงบ ไม่คัดลอกเบิกจ่าย/ปรับงบ; สถานะเริ่มที่ "ร่าง") */
+function plansDuplicate_(user, p) {
+  if (user.Role === 'viewer') fail_('FORBIDDEN', 'ท่านไม่มีสิทธิ์สร้างแผนงาน');
+  var toYear = str_(p.toYear);
+  if (!/^25\d\d$/.test(toYear)) fail_('VALIDATION', 'ปีงบประมาณปลายทางต้องเป็น พ.ศ. 4 หลัก');
+  var ids = (p.planIds || []).slice(0, 100);
+  if (!ids.length) fail_('VALIDATION', 'ยังไม่ได้เลือกแผนงาน');
+  var shift = p.shiftDates !== false, skipX = p.skipExcluded !== false, now = nowIso_();
+  var allActs = readAll_('Activities'), allLines = readAll_('BudgetLines');
+  var P = [], A = [], L = [], logs = [], seqNext = {};
+  ids.forEach(function (id) {
+    var pl = findBy_('Plans', 'PlanId', id);
+    if (!pl || bool_(pl.IsDeleted)) return;
+    var key = pl.FundCode;
+    seqNext[key] = seqNext[key] === undefined ? num_(nextSeq_(toYear, pl.FundCode)) : seqNext[key] + 1;
+    var o = stripRow_(pl);
+    o.PlanId = newId_('P'); o.Year = toYear; o.Seq = String(seqNext[key]); o.Status = 'ร่าง'; o.ReturnDate = '';
+    o.SummarySent = false; o.SummarySentDate = ''; o.SummaryFileUrl = ''; o.IsDeleted = false; o.Source = 'COPY';
+    o.Note = ((pl.Note ? pl.Note + ' | ' : '') + 'คัดลอกจากปี ' + pl.Year + ' ลำดับ ' + pl.Seq).substring(0, 500);
+    o.CreatedAt = now; o.CreatedBy = user.Email; o.UpdatedAt = now; o.UpdatedBy = user.Email;
+    P.push(o);
+    var dy = parseInt(toYear, 10) - parseInt(pl.Year, 10), na = 0;
+    allActs.filter(function (a) { return a.PlanId === pl.PlanId && !bool_(a.IsDeleted); })
+      .sort(function (a, b) { return num_(a.SortOrder) - num_(b.SortOrder); })
+      .forEach(function (a) {
+        if (skipX && ACT_EXCLUDED_.indexOf(a.Status) >= 0) return;
+        var n = stripRow_(a);
+        n.ActId = newId_('A'); n.PlanId = o.PlanId; n.Status = 'ปกติ'; n.SortOrder = ++na; n.DateText = ''; n.Source = 'COPY';
+        n.PlanStart = shift ? addYears_(dstr_(a.PlanStart), dy) : dstr_(a.PlanStart);
+        n.PlanEnd = shift ? addYears_(dstr_(a.PlanEnd), dy) : dstr_(a.PlanEnd);
+        n.CreatedAt = now; n.CreatedBy = user.Email; n.UpdatedAt = now; n.UpdatedBy = user.Email; n.IsDeleted = false;
+        A.push(n);
+        allLines.filter(function (l) { return l.ActId === a.ActId; }).forEach(function (l) {
+          L.push({ LineId: newId_('L'), ActId: n.ActId, PlanId: o.PlanId, CategoryCode: l.CategoryCode, Amount: num_(l.Amount), Detail: l.Detail });
+        });
+      });
+    logs.push(chgRow_(user, 'Plan', o.PlanId, o.PlanId, '(คัดลอกแผน)', 'ปี ' + pl.Year + ' #' + pl.Seq, 'ปี ' + toYear + ' #' + o.Seq, ''));
+  });
+  if (!P.length) fail_('NOT_FOUND', 'ไม่พบแผนงานที่เลือก');
+  insertMany_('Plans', P);
+  if (A.length) insertMany_('Activities', A);
+  if (L.length) insertMany_('BudgetLines', L);
+  writeChanges_(logs);
+  audit_(user.Email, 'คัดลอก/ยกแผนไปปีงบ ' + toYear, 'Plan', String(P.length), 'กิจกรรม ' + A.length);
+  return { created: P.map(function (x) { return x.PlanId; }), plans: P.length, activities: A.length };
 }
 
 function plansMarkSummary_(user, p) {
@@ -1135,6 +1308,7 @@ function plansMarkSummary_(user, p) {
   if (!sent && o.Status === 'ส่งสรุปแล้ว') o.Status = 'ดำเนินการ';
   o.UpdatedAt = nowIso_(); o.UpdatedBy = user.Email;
   update_('Plans', pl._row, o);
+  writeChanges_(diffRows_(user, 'Plan', o.PlanId, o.PlanId, '', pl, o, ['SummarySent', 'Status'], ''));
   audit_(user.Email, sent ? 'ส่งสรุปโครงการ' : 'ยกเลิกการส่งสรุป', 'Plan', o.PlanId, o.Name);
   return { ok: true };
 }
@@ -1144,6 +1318,7 @@ function plansDelete_(admin, p) {
   if (!pl) fail_('NOT_FOUND', 'ไม่พบแผนงาน');
   var o = stripRow_(pl); o.IsDeleted = !p.restore; o.UpdatedAt = nowIso_(); o.UpdatedBy = admin.Email;
   update_('Plans', pl._row, o);
+  writeChanges_([chgRow_(admin, 'Plan', o.PlanId, o.PlanId, p.restore ? '(กู้คืนแผนงาน)' : '(ลบแผนงาน)', '', o.Name, p.reason)]);
   audit_(admin.Email, p.restore ? 'กู้คืนแผนงาน' : 'ลบแผนงาน', 'Plan', o.PlanId, o.Name);
   return { ok: true };
 }
@@ -1176,12 +1351,13 @@ function actCalcById_(actId) {
 }
 
 function actsSave_(user, p) {
-  var d = p.activity || {}, isNew = !d.ActId, old = null, planId;
-  if (isNew) { planId = d.PlanId; mustEditPlan_(user, planId); }
+  var d = p.activity || {}, isNew = !d.ActId, old = null, planId, plan;
+  if (isNew) { planId = d.PlanId; plan = mustEditPlan_(user, planId); }
   else {
     old = findBy_('Activities', 'ActId', d.ActId);
     if (!old || bool_(old.IsDeleted)) fail_('NOT_FOUND', 'ไม่พบกิจกรรม');
-    planId = old.PlanId; mustEditPlan_(user, planId);
+    planId = old.PlanId; plan = mustEditPlan_(user, planId);
+    checkExpected_(old, p.expectedUpdatedAt, 'กิจกรรม');
   }
   var pick = function (k) { return d[k] !== undefined ? d[k] : (old ? old[k] : ''); };
   var name = str_(pick('Name'));
@@ -1191,6 +1367,12 @@ function actsSave_(user, p) {
   var start = validDate_(pick('PlanStart'), 'วันที่เริ่ม'), end = validDate_(pick('PlanEnd'), 'วันที่สิ้นสุด');
   if (start && end && end < start) fail_('VALIDATION', 'วันที่สิ้นสุดต้องไม่ก่อนวันที่เริ่ม');
   var lines = (p.lines !== undefined) ? cleanLines_(p.lines) : null;
+
+  var oldLines = old ? readAll_('BudgetLines').filter(function (l) { return l.ActId === old.ActId; }) : [];
+  var oldSig = linesSig_(oldLines), newSig = lines ? linesSig_(lines) : oldSig;
+  var excl = function (s) { return ACT_EXCLUDED_.indexOf(s) >= 0; };
+  var sensitive = isNew ? !!(lines && lines.length) : (newSig !== oldSig || excl(old.Status) !== excl(status));
+  var reason = sensitive ? reasonOk_(plan, p.reason) : str_(p.reason);
 
   var siblings = readAll_('Activities').filter(function (a) { return a.PlanId === planId && !bool_(a.IsDeleted); });
   var now = nowIso_();
@@ -1203,32 +1385,116 @@ function actsSave_(user, p) {
   if (isNew) insert_('Activities', o); else update_('Activities', old._row, o);
   if (lines) replaceLines_(o.ActId, planId, lines);
 
+  var prefix = '[' + o.No + '] ';
+  var logs = isNew
+    ? [chgRow_(user, 'Activity', o.ActId, planId, '(เพิ่มกิจกรรม) ' + prefix + name.substring(0, 60), '', linesText_(lines || []), reason)]
+    : diffRows_(user, 'Activity', o.ActId, planId, prefix, old, o, ['No', 'Name', 'Status', 'PlanStart', 'PlanEnd', 'Note'], reason);
+  if (!isNew && lines && newSig !== oldSig) logs.push(chgRow_(user, 'Activity', o.ActId, planId, prefix + 'รายการงบ', linesText_(oldLines), linesText_(lines), reason));
+  writeChanges_(logs);
+
   var warnings = [], c = actCalcById_(o.ActId);
-  if (ACT_EXCLUDED_.indexOf(status) >= 0 && c.plannedBudget > 0 && c.netPaid === 0) warnings.push('กิจกรรมสถานะ "' + status + '" มีงบ ' + c.plannedBudget.toLocaleString() + ' บาท ซึ่งจะถูกนับเป็นงบที่ปลดล็อกได้');
+  if (ACT_EXCLUDED_.indexOf(status) >= 0 && c.plannedBudget > 0 && c.netPaid === 0) warnings.push('กิจกรรมสถานะ "' + status + '" มีงบ ' + c.plannedBudget.toLocaleString() + ' บาท ซึ่งจะถูกนับเป็นงบที่ปลดล็อกได้ (โอนย้ายไปกิจกรรมอื่นได้)');
   audit_(user.Email, isNew ? 'เพิ่มกิจกรรม' : 'แก้ไขกิจกรรม', 'Activity', o.ActId, name);
-  return { actId: o.ActId, warnings: warnings };
+  return { actId: o.ActId, updatedAt: now, warnings: warnings };
 }
 
 function actsDelete_(user, p) {
   var a = findBy_('Activities', 'ActId', p.actId);
   if (!a || bool_(a.IsDeleted)) fail_('NOT_FOUND', 'ไม่พบกิจกรรม');
-  mustEditPlan_(user, a.PlanId);
+  var plan = mustEditPlan_(user, a.PlanId), reason = reasonOk_(plan, p.reason);
   var hasDisb = readAll_('Disbursements').some(function (d) { return d.ActId === a.ActId; });
   if (hasDisb) fail_('VALIDATION', 'กิจกรรมนี้มีรายการเบิกจ่ายแล้ว ลบไม่ได้ — ให้เปลี่ยนสถานะเป็น "ยกเลิก" แทน');
   var o = stripRow_(a); o.IsDeleted = true; o.UpdatedAt = nowIso_(); o.UpdatedBy = user.Email;
   update_('Activities', a._row, o);
+  writeChanges_([chgRow_(user, 'Activity', a.ActId, a.PlanId, '(ลบกิจกรรม) [' + a.No + ']', a.Name, '', reason)]);
   audit_(user.Email, 'ลบกิจกรรม', 'Activity', a.ActId, a.Name);
   return { ok: true };
 }
 
+function actsRestore_(user, p) {
+  var a = findBy_('Activities', 'ActId', p.actId);
+  if (!a || !bool_(a.IsDeleted)) fail_('NOT_FOUND', 'ไม่พบกิจกรรมที่ถูกลบ');
+  mustEditPlan_(user, a.PlanId);
+  var o = stripRow_(a); o.IsDeleted = false; o.UpdatedAt = nowIso_(); o.UpdatedBy = user.Email;
+  update_('Activities', a._row, o);
+  writeChanges_([chgRow_(user, 'Activity', a.ActId, a.PlanId, '(กู้คืนกิจกรรม) [' + a.No + ']', '', a.Name, '')]);
+  audit_(user.Email, 'กู้คืนกิจกรรม', 'Activity', a.ActId, a.Name);
+  return { ok: true };
+}
+
+function sortedActs_(planId) {
+  return readAll_('Activities').filter(function (a) { return a.PlanId === planId && !bool_(a.IsDeleted); })
+    .sort(function (a, b) { return (num_(a.SortOrder) - num_(b.SortOrder)) || String(a.No).localeCompare(String(b.No)); });
+}
+
+/** ขยับกิจกรรมขึ้น/ลงในแผนเดียวกัน */
+function actsReorder_(user, p) {
+  var a = findBy_('Activities', 'ActId', p.actId);
+  if (!a || bool_(a.IsDeleted)) fail_('NOT_FOUND', 'ไม่พบกิจกรรม');
+  mustEditPlan_(user, a.PlanId);
+  var list = sortedActs_(a.PlanId), i = -1;
+  list.forEach(function (x, k) { if (x.ActId === a.ActId) i = k; });
+  var j = p.direction === 'up' ? i - 1 : i + 1;
+  if (i < 0 || j < 0 || j >= list.length) return { moved: false };
+  var t = list[i]; list[i] = list[j]; list[j] = t;
+  list.forEach(function (x, k) {
+    if (num_(x.SortOrder) !== k + 1) { var o = stripRow_(x); o.SortOrder = k + 1; o.UpdatedAt = nowIso_(); o.UpdatedBy = user.Email; update_('Activities', x._row, o); }
+  });
+  return { moved: true };
+}
+
+/** ย้ายกิจกรรม (พร้อมรายการงบ/เบิกจ่าย/ปรับงบ) ไปแผนอื่นในปีงบประมาณเดียวกัน */
+function actsMove_(user, p) {
+  var a = findBy_('Activities', 'ActId', p.actId);
+  if (!a || bool_(a.IsDeleted)) fail_('NOT_FOUND', 'ไม่พบกิจกรรม');
+  if (a.PlanId === p.toPlanId) fail_('VALIDATION', 'เลือกแผนปลายทางที่ต่างจากเดิม');
+  var from = mustEditPlan_(user, a.PlanId), to = mustEditPlan_(user, p.toPlanId);
+  if (String(from.Year) !== String(to.Year)) fail_('VALIDATION', 'ย้ายได้เฉพาะแผนในปีงบประมาณเดียวกัน');
+  var reason = reasonOk_([from, to], p.reason);
+  var now = nowIso_(), o = stripRow_(a);
+  o.PlanId = to.PlanId;
+  o.SortOrder = sortedActs_(to.PlanId).reduce(function (m, x) { return Math.max(m, num_(x.SortOrder)); }, 0) + 1;
+  o.UpdatedAt = now; o.UpdatedBy = user.Email;
+  update_('Activities', a._row, o);
+  ['BudgetLines', 'Disbursements', 'Adjustments'].forEach(function (sheet) {
+    readAll_(sheet).filter(function (r) { return r.ActId === a.ActId; }).forEach(function (r) { var x = stripRow_(r); x.PlanId = to.PlanId; update_(sheet, r._row, x); });
+  });
+  writeChanges_([
+    chgRow_(user, 'Activity', a.ActId, from.PlanId, '(ย้ายกิจกรรมออก) [' + a.No + '] ' + a.Name.substring(0, 50), 'แผน: ' + from.Name.substring(0, 60), 'ย้ายไป: ' + to.Name.substring(0, 60), reason),
+    chgRow_(user, 'Activity', a.ActId, to.PlanId, '(ย้ายกิจกรรมเข้า) ' + a.Name.substring(0, 50), 'จากแผน: ' + from.Name.substring(0, 60), '', reason)]);
+  audit_(user.Email, 'ย้ายกิจกรรมไปแผนอื่น', 'Activity', a.ActId, a.Name);
+  return { ok: true };
+}
+
+/** คัดลอกกิจกรรม (พร้อมรายการงบ ไม่คัดลอกเบิกจ่าย) ไปแผนเดิมหรือแผนอื่น */
+function actsDuplicate_(user, p) {
+  var a = findBy_('Activities', 'ActId', p.actId);
+  if (!a || bool_(a.IsDeleted)) fail_('NOT_FOUND', 'ไม่พบกิจกรรม');
+  var toPlan = mustEditPlan_(user, p.toPlanId || a.PlanId);
+  var lines = readAll_('BudgetLines').filter(function (l) { return l.ActId === a.ActId; });
+  var reason = lines.length ? reasonOk_(toPlan, p.reason) : str_(p.reason);
+  var now = nowIso_(), sib = sortedActs_(toPlan.PlanId);
+  var o = stripRow_(a);
+  o.ActId = newId_('A'); o.PlanId = toPlan.PlanId; o.Name = (a.Name + ' (สำเนา)').substring(0, 300); o.Status = 'ปกติ';
+  o.No = String(sib.length + 1);
+  o.SortOrder = sib.reduce(function (m, x) { return Math.max(m, num_(x.SortOrder)); }, 0) + 1;
+  o.DateText = ''; o.Source = 'COPY'; o.CreatedAt = now; o.CreatedBy = user.Email; o.UpdatedAt = now; o.UpdatedBy = user.Email; o.IsDeleted = false;
+  insert_('Activities', o);
+  if (lines.length) insertMany_('BudgetLines', lines.map(function (l) { return { LineId: newId_('L'), ActId: o.ActId, PlanId: toPlan.PlanId, CategoryCode: l.CategoryCode, Amount: num_(l.Amount), Detail: l.Detail }; }));
+  writeChanges_([chgRow_(user, 'Activity', o.ActId, toPlan.PlanId, '(คัดลอกกิจกรรม) ' + a.Name.substring(0, 60), '', linesText_(lines), reason)]);
+  audit_(user.Email, 'คัดลอกกิจกรรม', 'Activity', o.ActId, a.Name);
+  return { actId: o.ActId };
+}
+
 // ---------------------------------------------------------------------------------
-// การเบิกจ่ายรายครั้ง (Disbursements) + การปรับงบ/คืนเงิน (Adjustments)
+// การเบิกจ่ายรายครั้ง (Disbursements) + การปรับงบ/คืนเงิน/โอนย้ายงบ (Adjustments)
 // ---------------------------------------------------------------------------------
 function checkUrl_(u, label) {
   u = str_(u);
   if (u && !/^https?:\/\//i.test(u)) fail_('VALIDATION', label + ' ต้องขึ้นต้นด้วย http:// หรือ https://');
   return u;
 }
+var DISB_FIELDS_ = ['Amount', 'ApproveDate', 'PayRequestDate', 'PaidDate', 'EvidenceUrl', 'Note'];
 
 function disbSave_(user, p) {
   var d = p.disb || {}, isNew = !d.DisbId, old = null, act = null, planId;
@@ -1236,6 +1502,7 @@ function disbSave_(user, p) {
     old = findBy_('Disbursements', 'DisbId', d.DisbId);
     if (!old) fail_('NOT_FOUND', 'ไม่พบรายการเบิกจ่าย');
     planId = old.PlanId;
+    checkExpected_(old, p.expectedUpdatedAt, 'รายการเบิกจ่าย');
   }
   var actId = str_(d.ActId !== undefined ? d.ActId : (old ? old.ActId : ''));
   if (actId) {
@@ -1243,10 +1510,11 @@ function disbSave_(user, p) {
     if (!act || bool_(act.IsDeleted)) fail_('NOT_FOUND', 'ไม่พบกิจกรรม');
     planId = act.PlanId;
   } else if (isNew) planId = d.PlanId;
-  mustEditPlan_(user, planId);
+  var plan = mustEditPlan_(user, planId);
 
   var amt = num_(d.Amount !== undefined ? d.Amount : (old ? old.Amount : 0));
   if (!(amt > 0)) fail_('VALIDATION', 'จำนวนเงินที่เบิกต้องมากกว่า 0');
+  var reason = (!isNew && round2_(amt) !== round2_(num_(old.Amount))) ? reasonOk_(plan, p.reason) : str_(p.reason);
   var pick = function (k) { return d[k] !== undefined ? d[k] : (old ? old[k] : ''); };
   var now = nowIso_();
   var siblings = readAll_('Disbursements').filter(function (x) { return x.PlanId === planId && String(x.ActId) === actId; });
@@ -1260,25 +1528,33 @@ function disbSave_(user, p) {
   o.Amount = round2_(amt); o.EvidenceUrl = checkUrl_(pick('EvidenceUrl'), 'ลิงก์หลักฐาน'); o.Note = str_(pick('Note')).substring(0, 500);
   o.UpdatedAt = now; o.UpdatedBy = user.Email;
   if (isNew) insert_('Disbursements', o); else update_('Disbursements', old._row, o);
+  writeChanges_(isNew
+    ? [chgRow_(user, 'Disbursement', o.DisbId, planId, '(บันทึกเบิกจ่าย) ' + (act ? '[' + act.No + '] ' : 'ระดับแผน '), '', o.Amount, '')]
+    : diffRows_(user, 'Disbursement', o.DisbId, planId, '[เบิกครั้งที่ ' + o.Seq + '] ', old, o, DISB_FIELDS_, reason));
 
   var warnings = [];
   if (actId) { var c = actCalcById_(actId); if (c.netPaid > c.activeBudget + 0.5 && !c.excluded) warnings.push('เบิกจ่ายสะสม ' + c.netPaid.toLocaleString() + ' บาท เกินงบของกิจกรรม ' + c.plannedBudget.toLocaleString() + ' บาท'); }
   audit_(user.Email, isNew ? 'บันทึกเบิกจ่าย' : 'แก้ไขเบิกจ่าย', 'Disbursement', o.DisbId, String(o.Amount));
-  return { disbId: o.DisbId, warnings: warnings };
+  return { disbId: o.DisbId, updatedAt: now, warnings: warnings };
 }
 function disbDelete_(user, p) {
   var d = findBy_('Disbursements', 'DisbId', p.disbId);
   if (!d) fail_('NOT_FOUND', 'ไม่พบรายการเบิกจ่าย');
-  mustEditPlan_(user, d.PlanId);
+  var plan = mustEditPlan_(user, d.PlanId), reason = reasonOk_(plan, p.reason);
   removeRows_('Disbursements', [d._row]);
+  writeChanges_([chgRow_(user, 'Disbursement', d.DisbId, d.PlanId, '(ลบเบิกจ่าย) ครั้งที่ ' + d.Seq, d.Amount, '', reason)]);
   audit_(user.Email, 'ลบเบิกจ่าย', 'Disbursement', d.DisbId, String(d.Amount));
   return { ok: true };
 }
 
 function adjSave_(user, p) {
   var d = p.adj || {}, isNew = !d.AdjId, old = null, planId;
-  if (!isNew) { old = findBy_('Adjustments', 'AdjId', d.AdjId); if (!old) fail_('NOT_FOUND', 'ไม่พบรายการปรับงบ'); planId = old.PlanId; }
-  else planId = d.PlanId;
+  if (!isNew) {
+    old = findBy_('Adjustments', 'AdjId', d.AdjId);
+    if (!old) fail_('NOT_FOUND', 'ไม่พบรายการปรับงบ');
+    planId = old.PlanId;
+    if (old.TransferId) fail_('VALIDATION', 'รายการโอนย้ายงบแก้ไขไม่ได้ — ให้ลบรายการโอนแล้วโอนใหม่');
+  } else planId = d.PlanId;
   mustEditPlan_(user, planId);
   var pick = function (k) { return d[k] !== undefined ? d[k] : (old ? old[k] : ''); };
   var type = str_(pick('Type'));
@@ -1289,19 +1565,49 @@ function adjSave_(user, p) {
   if (!reason) fail_('VALIDATION', 'กรุณาระบุเหตุผล');
   var actId = str_(pick('ActId'));
   if (actId) { var a = findBy_('Activities', 'ActId', actId); if (!a || a.PlanId !== planId) fail_('VALIDATION', 'กิจกรรมไม่ได้อยู่ในแผนงานนี้'); }
-  var o = isNew ? { AdjId: newId_('J'), PlanId: planId, CreatedAt: nowIso_(), CreatedBy: user.Email } : stripRow_(old);
+  var o = isNew ? { AdjId: newId_('J'), PlanId: planId, CreatedAt: nowIso_(), CreatedBy: user.Email, TransferId: '' } : stripRow_(old);
   o.ActId = actId; o.Type = type; o.Amount = round2_(amt); o.Reason = reason.substring(0, 500); o.Date = validDate_(pick('Date'), 'วันที่') || todayIso_();
   if (isNew) insert_('Adjustments', o); else update_('Adjustments', old._row, o);
+  writeChanges_(isNew
+    ? [chgRow_(user, 'Adjustment', o.AdjId, planId, '(' + type + ')', '', o.Amount, reason)]
+    : diffRows_(user, 'Adjustment', o.AdjId, planId, '[' + type + '] ', old, o, ['Amount', 'ActId'], reason));
   audit_(user.Email, isNew ? 'บันทึกปรับงบ/คืนเงิน' : 'แก้ไขปรับงบ/คืนเงิน', 'Adjustment', o.AdjId, type + ' ' + o.Amount);
   return { adjId: o.AdjId };
 }
 function adjDelete_(user, p) {
   var a = findBy_('Adjustments', 'AdjId', p.adjId);
   if (!a) fail_('NOT_FOUND', 'ไม่พบรายการ');
-  mustEditPlan_(user, a.PlanId);
-  removeRows_('Adjustments', [a._row]);
-  audit_(user.Email, 'ลบปรับงบ/คืนเงิน', 'Adjustment', a.AdjId, a.Type);
-  return { ok: true };
+  var rows = a.TransferId ? readAll_('Adjustments').filter(function (x) { return x.TransferId === a.TransferId; }) : [a];
+  var plans = rows.map(function (x) { return mustEditPlan_(user, x.PlanId); });
+  var reason = reasonOk_(plans, p.reason);
+  removeRows_('Adjustments', rows.map(function (x) { return x._row; }));
+  writeChanges_(rows.map(function (x) { return chgRow_(user, 'Adjustment', x.AdjId, x.PlanId, a.TransferId ? '(ยกเลิกการโอนย้ายงบ)' : '(ลบ' + x.Type + ')', x.Amount, '', reason); }));
+  audit_(user.Email, a.TransferId ? 'ยกเลิกการโอนย้ายงบ' : 'ลบปรับงบ/คืนเงิน', 'Adjustment', a.AdjId, a.Type);
+  return { ok: true, removed: rows.length };
+}
+
+/** โอนย้ายงบระหว่างกิจกรรม (ภายในปีงบเดียวกัน) = ปรับลดงบต้นทาง + ปรับเพิ่มงบปลายทาง เชื่อมกันด้วย TransferId */
+function budgetTransfer_(user, p) {
+  var from = findBy_('Activities', 'ActId', p.fromActId), to = findBy_('Activities', 'ActId', p.toActId);
+  if (!from || bool_(from.IsDeleted) || !to || bool_(to.IsDeleted)) fail_('NOT_FOUND', 'ไม่พบกิจกรรมต้นทางหรือปลายทาง');
+  if (from.ActId === to.ActId) fail_('VALIDATION', 'ต้นทางและปลายทางต้องเป็นคนละกิจกรรม');
+  var fp = mustEditPlan_(user, from.PlanId), tp = mustEditPlan_(user, to.PlanId);
+  if (String(fp.Year) !== String(tp.Year)) fail_('VALIDATION', 'โอนย้ายงบได้เฉพาะภายในปีงบประมาณเดียวกัน');
+  var amt = round2_(num_(p.amount)), reason = str_(p.reason);
+  if (!(amt > 0)) fail_('VALIDATION', 'จำนวนเงินต้องมากกว่า 0');
+  if (reason.length < 3) fail_('REASON_REQUIRED', 'กรุณาระบุเหตุผลการโอนย้ายงบ');
+  if (ACT_EXCLUDED_.indexOf(to.Status) >= 0) fail_('VALIDATION', 'กิจกรรมปลายทางต้องไม่เป็นสถานะ ยกเลิก/ไม่เบิก/ไม่ใช้งบประมาณ');
+  var c = actCalcById_(from.ActId), avail = round2_(c.plannedBudget - c.netPaid);
+  if (amt > avail + 0.5) fail_('VALIDATION', 'โอนเกินยอดคงเหลือของกิจกรรมต้นทาง (โอนได้ไม่เกิน ' + avail.toLocaleString() + ' บาท)');
+  var tid = newId_('T'), date = validDate_(p.date, 'วันที่') || todayIso_(), now = nowIso_();
+  var out = { AdjId: newId_('J'), PlanId: from.PlanId, ActId: from.ActId, Type: 'ปรับลดงบ', Amount: amt, Reason: ('[โอนย้ายไป ' + to.Name.substring(0, 60) + '] ' + reason).substring(0, 500), Date: date, CreatedAt: now, CreatedBy: user.Email, TransferId: tid };
+  var inn = { AdjId: newId_('J'), PlanId: to.PlanId, ActId: to.ActId, Type: 'ปรับเพิ่มงบ', Amount: amt, Reason: ('[โอนย้ายจาก ' + from.Name.substring(0, 60) + '] ' + reason).substring(0, 500), Date: date, CreatedAt: now, CreatedBy: user.Email, TransferId: tid };
+  insertMany_('Adjustments', [out, inn]);
+  writeChanges_([
+    chgRow_(user, 'Adjustment', out.AdjId, from.PlanId, '(โอนย้ายงบออก) [' + from.No + '] ' + from.Name.substring(0, 40), amt, '', reason),
+    chgRow_(user, 'Adjustment', inn.AdjId, to.PlanId, '(โอนย้ายงบเข้า) [' + to.No + '] ' + to.Name.substring(0, 40), '', amt, reason)]);
+  audit_(user.Email, 'โอนย้ายงบ', 'Transfer', tid, amt + ' บาท');
+  return { transferId: tid };
 }
 
 // ---------------------------------------------------------------------------------
@@ -1513,6 +1819,7 @@ var ACTIONS_ = {
   'dashboard':        { role: 'viewer', fn: dashboard_ },
   'overdue.list':     { role: 'viewer', fn: overdueList_ },
   'fix.list':         { role: 'viewer', fn: fixList_ },
+  'history.list':     { role: 'viewer', fn: historyList_ },
 
   'plans.save':       { role: 'user', write: true, fn: plansSave_ },
   'plans.markSummary':{ role: 'user', write: true, fn: plansMarkSummary_ },
@@ -1524,6 +1831,13 @@ var ACTIONS_ = {
   'adj.delete':       { role: 'user', write: true, fn: adjDelete_ },
   'file.upload':      { role: 'user', write: true, fn: fileUpload_ },
   'fix.resolve':      { role: 'user', write: true, fn: fixResolve_ },
+  'plans.bulk':       { role: 'user', write: true, fn: plansBulk_ },
+  'plans.duplicate':  { role: 'user', write: true, fn: plansDuplicate_ },
+  'acts.reorder':     { role: 'user', write: true, fn: actsReorder_ },
+  'acts.move':        { role: 'user', write: true, fn: actsMove_ },
+  'acts.duplicate':   { role: 'user', write: true, fn: actsDuplicate_ },
+  'acts.restore':     { role: 'user', write: true, fn: actsRestore_ },
+  'budget.transfer':  { role: 'user', write: true, fn: budgetTransfer_ },
 
   'plans.delete':     { role: 'admin', write: true, fn: plansDelete_ },
   'masters.save':     { role: 'admin', write: true, fn: mastersSave_ },

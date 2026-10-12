@@ -72,7 +72,7 @@
     const t = document.createElement('div'); t.className = 'toast ' + (type || 'info'); t.setAttribute('role', 'status'); t.textContent = msg; box.appendChild(t);
     setTimeout(() => { t.classList.add('out'); setTimeout(() => t.remove(), 300); }, type === 'error' ? 6500 : 3500);
   };
-  App.fail = e => { console.error(e); App.toast(e && e.message ? e.message : String(e), 'error'); };
+  App.fail = e => { if (e && e.silent) return; console.error(e); App.toast(e && e.message ? e.message : String(e), 'error'); };
 
   // ---------- โมดอล / ฟอร์ม ----------
   function openDialog(d) { if (typeof d.showModal === 'function') d.showModal(); else d.setAttribute('open', ''); }
@@ -111,6 +111,27 @@
       const obs = new MutationObserver(() => { if (!d.isConnected) { obs.disconnect(); if (!settled) res(false); } });
       obs.observe(document.body, { childList: true });
     });
+  };
+  /** ขอเหตุผลการแก้ไข -> Promise<string|null> (null = ผู้ใช้ยกเลิก) */
+  App.askReason = function (msg) {
+    return new Promise(res => {
+      let settled = false;
+      const d = App.modal({ title: 'ระบุเหตุผลการแก้ไข', submitLabel: 'ยืนยันและบันทึก',
+        html: '<p class="confirm-msg">' + esc(msg || 'กรุณาระบุเหตุผล') + '</p><div class="field"><label for="f_reason">เหตุผล <span class="req">*</span></label><textarea id="f_reason" name="reason" rows="3" maxlength="400" placeholder="เช่น ปรับตามหนังสือสั่งการ / ปรับแผนตามงบที่ได้รับจริง"></textarea></div><p class="muted small">เหตุผลจะถูกบันทึกในประวัติการแก้ไขของแผนนี้</p>',
+        onSubmit: dlg => { const v = dlg.querySelector('[name=reason]').value.trim(); if (v.length < 3) throw new Error('กรุณาระบุเหตุผลอย่างน้อย 3 ตัวอักษร'); settled = true; res(v); } });
+      const obs = new MutationObserver(() => { if (!d.isConnected) { obs.disconnect(); if (!settled) res(null); } });
+      obs.observe(document.body, { childList: true });
+    });
+  };
+  /** เรียก API; ถ้าเซิร์ฟเวอร์ตอบ REASON_REQUIRED ให้ถามเหตุผลแล้วส่งซ้ำ (ผู้ใช้กดยกเลิก = ไม่ทำรายการ ไม่แสดงข้อผิดพลาด) */
+  App.apiReason = async function (action, params, opts) {
+    try { return await App.api(action, params, opts); }
+    catch (e) {
+      if (!e || e.code !== 'REASON_REQUIRED') throw e;
+      const r = await App.askReason(e.message);
+      if (r === null) { const c = new Error(''); c.silent = true; throw c; }
+      return App.api(action, Object.assign({}, params, { reason: r }), opts);
+    }
   };
   /** สร้างช่องฟอร์ม: field({name,label,type,options,value,required,hint,full,attrs}) */
   App.field = function (f) {

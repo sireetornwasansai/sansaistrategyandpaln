@@ -88,3 +88,7 @@ dialog.modal{border:0;padding:0;border-radius:18px;max-width:560px;width:calc(10
 .user-cell{display:flex;gap:10px;align-items:center}.user-cell img,.user-cell .avatar{width:38px;height:38px;border-radius:50%}.setting{display:grid;grid-template-columns:1fr 220px auto;gap:12px;align-items:center;padding:10px 0;border-bottom:1px solid var(--bd)}@media(max-width:700px){.setting{grid-template-columns:1fr}}
 .skeleton{background:linear-gradient(90deg,var(--bd) 25%,var(--bg) 37%,var(--bd) 63%);background-size:400% 100%;animation:sk 1.3s infinite;border-radius:12px}.sk-h{height:34px;width:40%;margin-bottom:16px}.sk-c{height:90px}.sk-b{height:260px;margin-top:14px}.skeleton-wrap .cards{margin:0}@keyframes sk{to{background-position:-100% 0}}
 .error-card{border-color:#f1b5ba}@media print{.sidebar,.topbar,.head-actions,.foot,.btn{display:none!important}.main{margin:0}.card{box-shadow:none}}
+
+/* v2.1: เครื่องมือแก้ไข */
+.act-tools{flex-wrap:wrap}.bulk-bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px 14px;position:sticky;top:8px;z-index:5;border-color:var(--brand)}.bulk-bar[hidden]{display:none}
+th.chk,td.chk{width:34px;text-align:center}.nowrap{white-space:nowrap}

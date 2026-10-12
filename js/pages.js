@@ -85,7 +85,7 @@
   App.pages.plans = async function (view) {
     view.innerHTML = skeleton();
     const data = await App.api('plans.list', { year: S.year });
-    S.planList = data.plans;
+    S.planList = data.plans; S.sel = new Set();
     const owners = Array.from(new Set(data.plans.map(p => p.plan.Owner).filter(Boolean))).sort();
     const f = PF();
     const opt = (list, cur) => list.map(o => { const v = typeof o === 'object' ? o.v : o, l = typeof o === 'object' ? o.l : o; return '<option value="' + esc(v) + '"' + (v === cur ? ' selected' : '') + '>' + esc(l) + '</option>'; }).join('');
@@ -97,7 +97,7 @@
       '<select id="pf-exec"><option value="">ทุกสถานะเบิกจ่าย</option>' + opt(['เบิกครบ', 'เบิกบางส่วน', 'ยังไม่เบิก', 'ไม่มีงบ'], f.exec) + '</select>' +
       '<select id="pf-owner"><option value="">ทุกผู้รับผิดชอบ</option>' + opt(owners, f.owner) + '</select>' +
       '<label class="check"><input type="checkbox" id="pf-od"' + (f.onlyOverdue ? ' checked' : '') + '> เฉพาะค้างส่งสรุป</label><button class="btn ghost sm" data-act="clearFilters">ล้างตัวกรอง</button></div>' +
-      '<div class="card table-card"><div class="table-wrap"><table class="table plans"><thead><tr><th>#</th><th>แผนงาน / ผู้รับผิดชอบ</th><th class="num">งบที่ใช้จริง</th><th class="num">เบิกสุทธิ</th><th class="num">คงเหลือ</th><th>ความคืบหน้า</th><th>สถานะ</th></tr></thead><tbody id="plan-rows"></tbody><tfoot id="plan-foot"></tfoot></table></div></div>';
+      '<div id="bulk-bar" class="card bulk-bar" hidden></div><div class="card table-card"><div class="table-wrap"><table class="table plans"><thead><tr>' + (App.can() ? '<th class="chk"><input type="checkbox" id="sel-all" aria-label="เลือกทั้งหมด"></th>' : '') + '<th>#</th><th>แผนงาน / ผู้รับผิดชอบ</th><th class="num">งบที่ใช้จริง</th><th class="num">เบิกสุทธิ</th><th class="num">คงเหลือ</th><th>ความคืบหน้า</th><th>สถานะ</th></tr></thead><tbody id="plan-rows"></tbody><tfoot id="plan-foot"></tfoot></table></div></div>';
     const redraw = () => {
       const ff = PF(), q = ff.q.toLowerCase();
       const rows = S.planList.filter(x => (!ff.fund || x.plan.FundCode === ff.fund) && (!ff.status || x.plan.Status === ff.status) && (!ff.exec || x.calc.execState === ff.exec) &&
@@ -107,13 +107,14 @@
       $('#plan-rows').innerHTML = rows.map(x => {
         a += x.calc.activeBudget; p += x.calc.netPaid; r += x.calc.remaining;
         const pl = x.plan;
-        return '<tr class="click" data-href="#/plan/' + esc(pl.PlanId) + '"><td class="muted">' + esc(pl.Seq) + '</td><td><a href="#/plan/' + esc(pl.PlanId) + '" class="plan-link">' + esc(pl.Name) + '</a>' +
+        return '<tr class="click" data-href="#/plan/' + esc(pl.PlanId) + '">' + (App.can() ? '<td class="chk"><input type="checkbox" data-sel="' + esc(pl.PlanId) + '"' + (S.sel.has(pl.PlanId) ? ' checked' : '') + ' aria-label="เลือกแผน"></td>' : '') + '<td class="muted">' + esc(pl.Seq) + '</td><td><a href="#/plan/' + esc(pl.PlanId) + '" class="plan-link">' + esc(pl.Name) + '</a>' +
           '<div class="muted small"><span class="tag">' + esc(App.fundName(pl.FundCode)) + '</span> ' + esc(pl.Owner) + (x.calc.noDateCount ? ' · <span class="warn-text">' + x.calc.noDateCount + ' กิจกรรมไม่มีวันที่</span>' : '') + '</div></td>' +
           '<td class="num">' + App.money(x.calc.activeBudget, 0) + (x.calc.released ? '<div class="muted small">ปลดล็อก ' + App.money(x.calc.released, 0) + '</div>' : '') + '</td><td class="num">' + App.money(x.calc.netPaid, 0) + '</td><td class="num">' + App.money(x.calc.remaining, 0) + '</td>' +
           '<td class="prog-cell">' + App.progress(x.calc.pct) + '<small>' + App.pct(x.calc.pct) + '</small></td><td>' + App.badge(pl.Status) + ' ' + App.badge(x.calc.execState) + (x.overdue.is ? ' <span class="badge red" title="' + esc(x.overdue.reason) + '">ค้างสรุป</span>' : '') + '</td></tr>';
-      }).join('') || '<tr><td colspan="7" class="empty">ไม่พบแผนงานตามเงื่อนไข</td></tr>';
-      $('#plan-foot').innerHTML = rows.length ? '<tr><th colspan="2">รวม ' + rows.length + ' แผน</th><th class="num">' + App.money(a, 0) + '</th><th class="num">' + App.money(p, 0) + '</th><th class="num">' + App.money(r, 0) + '</th><th colspan="2">' + (a > 0 ? App.pct(p / a * 100) : '') + '</th></tr>' : '';
+      }).join('') || '<tr><td colspan="8" class="empty">ไม่พบแผนงานตามเงื่อนไข</td></tr>';
+      $('#plan-foot').innerHTML = rows.length ? '<tr><th colspan="' + (App.can() ? 3 : 2) + '">รวม ' + rows.length + ' แผน</th><th class="num">' + App.money(a, 0) + '</th><th class="num">' + App.money(p, 0) + '</th><th class="num">' + App.money(r, 0) + '</th><th colspan="2">' + (a > 0 ? App.pct(p / a * 100) : '') + '</th></tr>' : '';
       $('#plan-count').textContent = rows.length + ' จาก ' + S.planList.length + ' แผน';
+      App.updateBulk();
     };
     App.redrawPlans = redraw;
     $('#pf-q').addEventListener('input', App.debounce(e => { PF().q = e.target.value; redraw(); }, 200));
@@ -121,7 +122,7 @@
     $('#pf-od').addEventListener('change', e => { PF().onlyOverdue = e.target.checked; redraw(); });
     redraw();
   };
-  document.addEventListener('click', e => { const tr = e.target.closest('tr[data-href]'); if (tr && !e.target.closest('a,button')) location.hash = tr.getAttribute('data-href'); });
+  document.addEventListener('click', e => { const tr = e.target.closest('tr[data-href]'); if (tr && !e.target.closest('a,button,input,label')) location.hash = tr.getAttribute('data-href'); });
   App.actions.clearFilters = () => { S.pf = null; App.render(); };
   App.actions.exportCsv = () => {
     const rows = [['แหล่งเงิน', 'ลำดับ', 'ผู้รับผิดชอบ', 'แผนงาน', 'สถานะแผน', 'งบตามแผน', 'งบที่ใช้จริง', 'เบิกสุทธิ', 'คงเหลือ', 'ร้อยละ', 'ค้างส่งสรุป']];
@@ -149,13 +150,22 @@
         (p.ReturnDate ? '<div><span class="muted">ส่งคืนแผนเมื่อ</span> ' + App.date(p.ReturnDate) + '</div>' : '') + '</div><div class="meta strat">' + stratHtml + '</div>' + (p.Note ? '<p class="note">📝 ' + esc(p.Note) + '</p>' : '') + '</div>' +
         '<div class="ph-actions">' + (edit ? '<button class="btn" data-act="editPlan">✎ แก้ไขแผน</button>' + '<button class="btn" data-act="summary">' + (p.SummarySent ? '✔ ส่งสรุปแล้ว ' + App.date(p.SummarySentDate) : '📄 ส่งสรุปโครงการ') + '</button>' : (p.SummarySent ? '<span class="badge green">ส่งสรุปแล้ว ' + App.date(p.SummarySentDate) + '</span>' : '')) +
         (p.SummaryFileUrl && safeUrl(p.SummaryFileUrl) ? '<a class="btn ghost" target="_blank" rel="noopener" href="' + esc(safeUrl(p.SummaryFileUrl)) + '">เปิดไฟล์สรุป</a>' : '') +
+        '<button class="btn ghost" data-act="history">🕘 ประวัติการแก้ไข</button>' + (edit ? '<button class="btn ghost" data-act="dupPlanOne">⧉ คัดลอกไปปีงบใหม่</button>' : '') +
         (App.isAdmin() ? (p.IsDeleted ? '<button class="btn" data-act="restorePlan">กู้คืน</button>' : '<button class="btn danger ghost" data-act="deletePlan">🗑 ลบแผน</button>') : '') + '</div></section>' +
+      (g.locked ? '<div class="alert warn"><b>🔒 แผนนี้อยู่ในสถานะ "ปิด"</b> ' + (App.isAdmin() ? 'แอดมินยังแก้ไขได้' : 'แก้ไขได้เฉพาะแอดมิน — ติดต่อแอดมินหากต้องการเปิดแก้ไข') + '</div>' : '') +
+      (edit && g.reasonRequired ? '<div class="alert info">แผนนี้อนุมัติแล้ว — การแก้ไขงบ/สถานะ/ลบรายการ ต้องระบุเหตุผล และจะถูกบันทึกในประวัติการแก้ไข</div>' : '') +
       (g.overdue.is ? '<div class="alert warn"><b>ค้างส่งสรุปโครงการ</b> ' + esc(g.overdue.reason) + '</div>' : '') +
       '<div class="cards kpis">' + kp('งบตามแผน', App.money(c.plannedBudget, 0)) + kp('งบที่ใช้จริง', App.money(c.activeBudget, 0)) + kp('เบิกจ่ายสุทธิ', App.money(c.netPaid, 0), 'accent') + kp('คงเหลือ', App.money(c.remaining, 0)) + kp('ปลดล็อกได้', App.money(c.released, 0), c.released ? 'warn' : '') + kp('ร้อยละ', App.pct(c.pct) + App.progress(c.pct)) + '</div>' +
       '<div class="section-head"><h2>กิจกรรม (' + g.activities.length + ')</h2>' + (edit ? '<button class="btn primary" data-act="newAct">＋ เพิ่มกิจกรรม</button>' : '') + '</div>' +
       (g.activities.length ? g.activities.map(a => actCard(a, edit, g.activities.length <= 5)).join('') : '<div class="card empty">ยังไม่มีกิจกรรม' + (edit ? ' — กด "เพิ่มกิจกรรม" เพื่อเริ่มวางงบ' : '') + '</div>') +
-      planLevel(g, edit);
+      deletedPanel(g, edit) + planLevel(g, edit);
   };
+  function deletedPanel(g, edit) {
+    const del = g.deletedActivities || [];
+    if (!edit || !del.length) return '';
+    return '<details class="card"><summary><b>กิจกรรมที่ถูกลบ (' + del.length + ')</b> <span class="muted small">— กู้คืนได้</span></summary><table class="table slim"><tbody>' +
+      del.map(x => '<tr><td>' + esc(x.No) + '</td><td>' + esc(x.Name) + '</td><td class="act-cell"><button class="btn sm" data-act="restoreAct" data-id="' + esc(x.ActId) + '">↺ กู้คืน</button></td></tr>').join('') + '</tbody></table></details>';
+  }
 
   function actCard(a, edit, open) {
     const ac = a.act, c = a.calc;
@@ -166,11 +176,11 @@
         (safeUrl(d.EvidenceUrl) ? '<a target="_blank" rel="noopener" href="' + esc(safeUrl(d.EvidenceUrl)) + '">เปิดไฟล์</a>' : '<span class="muted">—</span>') + (d.Note ? '<div class="muted small">' + esc(d.Note) + '</div>' : '') + '</td><td class="act-cell">' +
         (edit ? '<button class="icon-btn" title="แก้ไข" data-act="editDisb" data-id="' + esc(d.DisbId) + '">✎</button><button class="icon-btn" title="ลบ" data-act="delDisb" data-id="' + esc(d.DisbId) + '">🗑</button>' : '') + '</td></tr>').join('') + '</tbody></table></div>' : '<p class="muted small">ยังไม่มีการเบิกจ่าย</p>');
     const adj = (a.adjs.length || edit) ? '<div class="sub-head"><h4>ปรับงบ / คืนเงิน</h4>' + (edit ? '<button class="btn sm ghost" data-act="newAdj" data-id="' + esc(ac.ActId) + '">＋ เพิ่ม</button>' : '') + '</div>' +
-      (a.adjs.length ? '<table class="table slim"><tbody>' + a.adjs.map(j => '<tr><td>' + App.badge(j.Type, j.Type === 'ปรับเพิ่มงบ' ? 'green' : (j.Type === 'คืนเงิน' ? 'blue' : 'amber')) + '</td><td>' + App.date(j.Date) + '</td><td>' + esc(j.Reason) + '</td><td class="num">' + App.money(j.Amount) + '</td><td class="act-cell">' + (edit ? '<button class="icon-btn" data-act="editAdj" data-id="' + esc(j.AdjId) + '">✎</button><button class="icon-btn" data-act="delAdj" data-id="' + esc(j.AdjId) + '">🗑</button>' : '') + '</td></tr>').join('') + '</tbody></table>' : '') : '';
+      (a.adjs.length ? '<table class="table slim"><tbody>' + a.adjs.map(j => '<tr><td>' + App.badge(j.Type, j.Type === 'ปรับเพิ่มงบ' ? 'green' : (j.Type === 'คืนเงิน' ? 'blue' : 'amber')) + '</td><td>' + App.date(j.Date) + '</td><td>' + esc(j.Reason) + '</td><td class="num">' + App.money(j.Amount) + '</td><td class="act-cell">' + (edit ? (j.TransferId ? '<span class="badge gray" title="รายการโอนย้ายงบ แก้ไขไม่ได้ — ลบแล้วโอนใหม่">โอนย้าย</span>' : '<button class="icon-btn" data-act="editAdj" data-id="' + esc(j.AdjId) + '">✎</button>') + '<button class="icon-btn" data-act="delAdj" data-id="' + esc(j.AdjId) + '" title="' + (j.TransferId ? 'ยกเลิกการโอนย้าย' : 'ลบ') + '">🗑</button>' : '') + '</td></tr>').join('') + '</tbody></table>' : '') : '';
     return '<details class="card act' + (c.excluded ? ' excluded' : '') + '" id="act-' + esc(ac.ActId) + '"' + (open ? ' open' : '') + '><summary><div class="act-title"><b>' + esc(ac.No) + '</b> ' + esc(ac.Name) + ' ' + App.badge(ac.Status) +
       '<div class="muted small">' + (ac.PlanStart ? App.date(ac.PlanStart) + (ac.PlanEnd && ac.PlanEnd !== ac.PlanStart ? ' – ' + App.date(ac.PlanEnd) : '') : '<span class="warn-text">ยังไม่ระบุวันที่</span>') + (ac.Note ? ' · ' + esc(ac.Note) : '') + '</div></div>' +
       '<div class="act-nums"><span>งบ <b>' + App.money(c.plannedBudget, 0) + '</b></span><span>เบิก <b>' + App.money(c.netPaid, 0) + '</b></span><span>คงเหลือ <b>' + App.money(c.remaining, 0) + '</b></span></div></summary>' +
-      '<div class="act-body">' + App.progress(c.pct) + lines + disb + adj + (edit ? '<div class="act-tools"><button class="btn sm" data-act="editAct" data-id="' + esc(ac.ActId) + '">✎ แก้ไขกิจกรรม/งบ</button><button class="btn sm danger ghost" data-act="delAct" data-id="' + esc(ac.ActId) + '">ลบกิจกรรม</button></div>' : '') + '</div></details>';
+      '<div class="act-body">' + App.progress(c.pct) + lines + disb + adj + (edit ? '<div class="act-tools"><button class="btn sm" data-act="editAct" data-id="' + esc(ac.ActId) + '">✎ แก้ไขกิจกรรม/งบ</button><button class="btn sm" data-act="transferBudget" data-id="' + esc(ac.ActId) + '" title="โอนย้ายงบไปกิจกรรมอื่น">⇄ โอนย้ายงบ</button><button class="btn sm ghost" data-act="dupAct" data-id="' + esc(ac.ActId) + '">⧉ คัดลอก</button><button class="btn sm ghost" data-act="moveAct" data-id="' + esc(ac.ActId) + '">↪ ย้ายไปแผนอื่น</button><button class="btn sm ghost" data-act="actUp" data-id="' + esc(ac.ActId) + '" aria-label="เลื่อนขึ้น">▲</button><button class="btn sm ghost" data-act="actDown" data-id="' + esc(ac.ActId) + '" aria-label="เลื่อนลง">▼</button><button class="btn sm danger ghost" data-act="delAct" data-id="' + esc(ac.ActId) + '">ลบกิจกรรม</button></div>' : '') + '</div></details>';
   }
   function planLevel(g, edit) {
     const pd = g.planDisbs || [];
@@ -223,7 +233,7 @@
       },
       onSubmit: async d => {
         const v = App.values(d); if (!isNew) v.PlanId = plan.PlanId;
-        const r = await App.api('plans.save', { plan: v });
+        const r = await App.apiReason('plans.save', { plan: v, expectedUpdatedAt: isNew ? undefined : plan.UpdatedAt });
         App.toast('บันทึกแผนงานแล้ว', 'success');
         if (isNew) location.hash = '#/plan/' + r.planId; else reload();
       } });
@@ -231,7 +241,7 @@
   App.planForm = planForm;
   App.actions.newPlan = () => planForm(null);
   App.actions.editPlan = () => planForm(S.cur.plan);
-  App.actions.deletePlan = async () => { if (await App.confirm('ลบแผน "' + S.cur.plan.Name + '" ? (กู้คืนได้โดยแอดมิน)', 'ลบแผน', true)) { await App.api('plans.delete', { planId: S.cur.plan.PlanId }); App.toast('ลบแผนแล้ว', 'success'); location.hash = '#/plans'; } };
+  App.actions.deletePlan = async () => { if (await App.confirm('ลบแผน "' + S.cur.plan.Name + '" ? (กู้คืนได้โดยแอดมิน)', 'ลบแผน', true)) { await App.api('plans.delete', { planId: S.cur.plan.PlanId, reason: 'ลบโดยแอดมิน' }); App.toast('ลบแผนแล้ว', 'success'); location.hash = '#/plans'; } };
   App.actions.restorePlan = async () => { await App.api('plans.delete', { planId: S.cur.plan.PlanId, restore: true }); App.toast('กู้คืนแผนแล้ว', 'success'); reload(); };
   App.actions.summary = () => {
     const p = S.cur.plan;
@@ -264,13 +274,13 @@
         $$('.line-row', d).forEach(r => { const c = $('[name=cat]', r).value, am = Number($('[name=amt]', r).value) || 0; if (c || am) { if (!c) throw new Error('กรุณาเลือกหมวดของรายการงบทุกแถว'); ls.push({ CategoryCode: c, Amount: am, Detail: $('[name=det]', r).value }); } });
         const act = { PlanId: planId, No: v.No, Name: v.Name, Status: v.Status, PlanStart: v.PlanStart, PlanEnd: v.PlanEnd, Note: v.Note };
         if (!isNew) act.ActId = ac.ActId;
-        const r = await App.api('acts.save', { activity: act, lines: ls });
+        const r = await App.apiReason('acts.save', { activity: act, lines: ls, expectedUpdatedAt: isNew ? undefined : ac.UpdatedAt });
         (r.warnings || []).forEach(w => App.toast(w, 'warn')); App.toast('บันทึกกิจกรรมแล้ว', 'success'); reload();
       } });
   }
   App.actions.newAct = () => actForm(S.cur.plan.PlanId, null);
   App.actions.editAct = el => actForm(S.cur.plan.PlanId, findAct(el.dataset.id));
-  App.actions.delAct = async el => { const a = findAct(el.dataset.id); if (await App.confirm('ลบกิจกรรม "' + a.act.Name + '" ?', 'ลบ', true)) { await App.api('acts.delete', { actId: a.act.ActId }); App.toast('ลบกิจกรรมแล้ว', 'success'); reload(); } };
+  App.actions.delAct = async el => { const a = findAct(el.dataset.id); if (await App.confirm('ลบกิจกรรม "' + a.act.Name + '" ?', 'ลบ', true)) { await App.apiReason('acts.delete', { actId: a.act.ActId }); App.toast('ลบกิจกรรมแล้ว', 'success'); reload(); } };
 
   // ---------------------------------------------------------------- ฟอร์มเบิกจ่าย
   function disbForm(actId, d0) {
@@ -284,13 +294,13 @@
       onSubmit: async dlg => {
         const v = App.values(dlg), x = { Amount: v.Amount, ApproveDate: v.ApproveDate, PayRequestDate: v.PayRequestDate, PaidDate: v.PaidDate, EvidenceUrl: v.EvidenceUrl, Note: v.Note };
         if (isNew) { x.ActId = actId; x.PlanId = S.cur.plan.PlanId; } else x.DisbId = d.DisbId;
-        const r = await App.api('disb.save', { disb: x }); (r.warnings || []).forEach(w => App.toast(w, 'warn')); App.toast('บันทึกเบิกจ่ายแล้ว', 'success'); reload();
+        const r = await App.apiReason('disb.save', { disb: x, expectedUpdatedAt: isNew ? undefined : d.UpdatedAt }); (r.warnings || []).forEach(w => App.toast(w, 'warn')); App.toast('บันทึกเบิกจ่ายแล้ว', 'success'); reload();
       } });
   }
   const findDisb = id => { for (const a of S.cur.activities) { const d = a.disbs.find(x => x.DisbId === id); if (d) return d; } return (S.cur.planDisbs || []).find(x => x.DisbId === id); };
   App.actions.newDisb = el => disbForm(el.dataset.id, null);
   App.actions.editDisb = el => { const d = findDisb(el.dataset.id); disbForm(d.ActId, d); };
-  App.actions.delDisb = async el => { if (await App.confirm('ลบรายการเบิกจ่ายนี้ ?', 'ลบ', true)) { await App.api('disb.delete', { disbId: el.dataset.id }); App.toast('ลบแล้ว', 'success'); reload(); } };
+  App.actions.delDisb = async el => { if (await App.confirm('ลบรายการเบิกจ่ายนี้ ?', 'ลบ', true)) { await App.apiReason('disb.delete', { disbId: el.dataset.id }); App.toast('ลบแล้ว', 'success'); reload(); } };
 
   // ---------------------------------------------------------------- ฟอร์มปรับงบ/คืนเงิน
   function adjForm(actId, j0) {
@@ -306,7 +316,7 @@
   const findAdj = id => { for (const a of S.cur.activities) { const j = a.adjs.find(x => x.AdjId === id); if (j) return j; } return S.cur.planAdjs.find(x => x.AdjId === id); };
   App.actions.newAdj = el => adjForm(el.dataset.id, null);
   App.actions.editAdj = el => adjForm('', findAdj(el.dataset.id));
-  App.actions.delAdj = async el => { if (await App.confirm('ลบรายการนี้ ?', 'ลบ', true)) { await App.api('adj.delete', { adjId: el.dataset.id }); App.toast('ลบแล้ว', 'success'); reload(); } };
+  App.actions.delAdj = async el => { if (await App.confirm(((findAdj(el.dataset.id) || {}).TransferId) ? 'ยกเลิกการโอนย้ายงบนี้ ? (ระบบจะลบรายการทั้งฝั่งต้นทางและปลายทางพร้อมกัน)' : 'ลบรายการนี้ ?', 'ลบ', true)) { await App.apiReason('adj.delete', { adjId: el.dataset.id }); App.toast('ลบแล้ว', 'success'); reload(); } };
 
   // ===================================================================== ค้างส่งสรุป
   App.pages.overdue = async function (view) {
@@ -329,4 +339,129 @@
     $('#fix-all').addEventListener('change', e => { S.fixAll = e.target.checked; App.render(); });
   };
   App.actions.fixToggle = async el => { await App.api('fix.resolve', { fixId: el.dataset.id, resolved: el.dataset.r === '1' }); App.render(); };
+
+  // ===================================================================== เครื่องมือแก้ไขเพิ่มเติม (v2.1)
+  const sameYearPlans = async () => { const d = await App.api('plans.list', { year: S.cur.plan.Year }); return d.plans.map(x => x.plan).filter(p => !p.IsDeleted); };
+  const planOpt = p => ({ v: p.PlanId, l: '#' + p.Seq + ' ' + App.fundName(p.FundCode) + ' — ' + p.Name });
+  const reloadKeep = async (actId) => { const y = window.scrollY; await App.render(); window.scrollTo(0, y); const d = actId && document.getElementById('act-' + actId); if (d) d.open = true; };
+
+  // ---- ประวัติการแก้ไข
+  App.actions.history = async () => {
+    const rows = await App.api('history.list', { planId: S.cur.plan.PlanId });
+    const html = rows.length ? '<div class="table-wrap"><table class="table slim"><thead><tr><th>เวลา</th><th>ผู้แก้ไข</th><th>รายการ</th><th>เดิม</th><th>ใหม่</th><th>เหตุผล</th></tr></thead><tbody>' +
+      rows.map(r => '<tr><td class="nowrap">' + esc(App.dateTime(r.Time)) + '</td><td class="small">' + esc(r.Email) + '</td><td>' + esc(r.Field) + '</td><td class="muted">' + esc(r.Old) + '</td><td>' + esc(r.New) + '</td><td class="small">' + esc(r.Reason) + '</td></tr>').join('') + '</tbody></table></div>' :
+      '<p class="muted">ยังไม่มีประวัติการแก้ไขของแผนนี้ (ระบบเริ่มบันทึกตั้งแต่เปิดใช้ฟีเจอร์นี้)</p>';
+    App.modal({ title: 'ประวัติการแก้ไข (ล่าสุด ' + rows.length + ' รายการ)', html: html, wide: true, hideSubmit: true });
+  };
+
+  // ---- กิจกรรม: กู้คืน / จัดลำดับ / ย้าย / คัดลอก
+  App.actions.restoreAct = async el => { await App.api('acts.restore', { actId: el.dataset.id }); App.toast('กู้คืนกิจกรรมแล้ว', 'success'); reload(); };
+  const reorder = dir => async el => {
+    const r = await App.api('acts.reorder', { actId: el.dataset.id, direction: dir });
+    if (!r.moved) { App.toast('ขยับไม่ได้อีกแล้ว', 'info'); return; }
+    await reloadKeep(el.dataset.id);
+  };
+  App.actions.actUp = reorder('up'); App.actions.actDown = reorder('down');
+  App.actions.moveAct = async el => {
+    const a = findAct(el.dataset.id), plans = (await sameYearPlans()).filter(p => p.PlanId !== S.cur.plan.PlanId);
+    if (!plans.length) { App.toast('ไม่มีแผนอื่นในปีงบประมาณเดียวกัน', 'warn'); return; }
+    App.modal({ title: 'ย้ายกิจกรรมไปแผนอื่น', submitLabel: 'ย้าย',
+      html: '<p>กิจกรรม <b>' + esc(a.act.Name) + '</b> จะถูกย้ายพร้อมรายการงบ การเบิกจ่าย และการปรับงบทั้งหมด</p>' + App.field({ name: 'toPlanId', label: 'แผนปลายทาง (ปีงบประมาณ ' + esc(S.cur.plan.Year) + ')', type: 'select', noBlank: true, options: plans.map(planOpt), required: true }),
+      onSubmit: async d => { await App.apiReason('acts.move', { actId: a.act.ActId, toPlanId: App.values(d).toPlanId }); App.toast('ย้ายกิจกรรมแล้ว', 'success'); reload(); } });
+  };
+  App.actions.dupAct = async el => {
+    const a = findAct(el.dataset.id), plans = await sameYearPlans();
+    App.modal({ title: 'คัดลอกกิจกรรม', submitLabel: 'คัดลอก',
+      html: '<p>คัดลอก <b>' + esc(a.act.Name) + '</b> พร้อมรายการงบ (ไม่คัดลอกการเบิกจ่ายและการปรับงบ)</p>' + App.field({ name: 'toPlanId', label: 'คัดลอกไปยังแผน', type: 'select', noBlank: true, options: plans.map(planOpt), value: S.cur.plan.PlanId }),
+      onSubmit: async d => { await App.apiReason('acts.duplicate', { actId: a.act.ActId, toPlanId: App.values(d).toPlanId }); App.toast('คัดลอกกิจกรรมแล้ว', 'success'); reload(); } });
+  };
+
+  // ---- โอนย้ายงบระหว่างกิจกรรม
+  App.actions.transferBudget = async el => {
+    const a = findAct(el.dataset.id), avail = Math.max(0, a.calc.plannedBudget - a.calc.netPaid), plans = await sameYearPlans(), cache = {};
+    cache[S.cur.plan.PlanId] = S.cur.activities;
+    if (avail <= 0) { App.toast('กิจกรรมนี้ไม่มีงบคงเหลือให้โอนย้าย', 'warn'); return; }
+    const excluded = App.masters().enums.actExcluded || [];
+    const actOpts = list => list.filter(x => x.act.ActId !== a.act.ActId && excluded.indexOf(x.act.Status) < 0).map(x => '<option value="' + esc(x.act.ActId) + '">' + esc(x.act.No + ' ' + x.act.Name + ' (คงเหลือ ' + App.money(x.calc.remaining, 0) + ')') + '</option>').join('');
+    App.modal({ title: 'โอนย้ายงบระหว่างกิจกรรม', submitLabel: 'โอนย้ายงบ', wide: true,
+      html: '<div class="alert info">ต้นทาง: <b>' + esc(a.act.No + ' ' + a.act.Name) + '</b> — โอนได้ไม่เกิน <b>' + App.money(avail) + '</b> บาท (งบตามแผน − เบิกสุทธิ)</div><div class="form-grid">' +
+        App.field({ name: 'toPlan', label: 'แผนปลายทาง (ปีงบประมาณเดียวกัน)', type: 'select', noBlank: true, options: plans.map(planOpt), value: S.cur.plan.PlanId, full: true }) +
+        '<div class="field full"><label for="f_toActId">กิจกรรมปลายทาง <span class="req">*</span></label><select id="f_toActId" name="toActId"></select></div>' +
+        App.field({ name: 'amount', label: 'จำนวนเงินที่โอน (บาท)', type: 'number', step: '0.01', required: true, attrs: ' min="0.01" max="' + avail + '" inputmode="decimal"' }) + App.field({ name: 'date', label: 'วันที่', type: 'date', value: App.today() }) +
+        App.field({ name: 'reason', label: 'เหตุผลการโอนย้าย', type: 'textarea', required: true, full: true }) + '</div>' +
+        '<p class="muted small">ระบบจะบันทึกเป็น "ปรับลดงบ" ที่ต้นทาง และ "ปรับเพิ่มงบ" ที่ปลายทาง เชื่อมกันเป็นรายการเดียว (ยกเลิกได้ทั้งคู่พร้อมกัน) และลงประวัติการแก้ไขของทั้งสองแผน</p>',
+      onOpen: d => {
+        const sp = d.querySelector('[name=toPlan]'), sa = d.querySelector('[name=toActId]');
+        const fill = async () => {
+          sa.innerHTML = '<option value="">กำลังโหลด…</option>';
+          try { if (!cache[sp.value]) cache[sp.value] = (await App.api('plans.get', { planId: sp.value })).activities; } catch (e) { sa.innerHTML = '<option value="">โหลดไม่สำเร็จ</option>'; return; }
+          sa.innerHTML = '<option value="">— เลือกกิจกรรมปลายทาง —</option>' + actOpts(cache[sp.value]);
+        };
+        sp.addEventListener('change', fill); fill();
+      },
+      onSubmit: async d => {
+        const v = App.values(d);
+        if (!v.toActId) throw new Error('กรุณาเลือกกิจกรรมปลายทาง');
+        if (!(Number(v.amount) > 0)) throw new Error('กรุณาระบุจำนวนเงินที่โอน');
+        await App.api('budget.transfer', { fromActId: a.act.ActId, toActId: v.toActId, amount: v.amount, date: v.date, reason: v.reason });
+        App.toast('โอนย้ายงบแล้ว', 'success'); reload();
+      } });
+  };
+
+  // ---- แก้ไขหลายแผน / คัดลอกไปปีงบใหม่ (หน้ารายการแผน)
+  App.updateBulk = () => {
+    const bar = $('#bulk-bar'); if (!bar) return;
+    const n = S.sel ? S.sel.size : 0;
+    bar.hidden = n === 0;
+    bar.innerHTML = '<b>เลือก ' + n + ' แผน</b><button class="btn sm" data-act="bulkEdit">✎ แก้ไขพร้อมกัน</button><button class="btn sm" data-act="bulkDup">⧉ คัดลอก/ยกไปปีงบใหม่</button><button class="btn sm ghost" data-act="bulkClear">ล้างที่เลือก</button>';
+    const all = $('#sel-all'); if (all) { const rows = S.planRows || []; all.checked = rows.length > 0 && rows.every(x => S.sel.has(x.plan.PlanId)); }
+  };
+  document.addEventListener('change', e => {
+    if (!S.sel) return;
+    if (e.target.matches && e.target.matches('[data-sel]')) { const id = e.target.getAttribute('data-sel'); if (e.target.checked) S.sel.add(id); else S.sel.delete(id); App.updateBulk(); }
+    else if (e.target.id === 'sel-all') { (S.planRows || []).forEach(x => { if (e.target.checked) S.sel.add(x.plan.PlanId); else S.sel.delete(x.plan.PlanId); }); App.$$('[data-sel]').forEach(c => { c.checked = e.target.checked; }); App.updateBulk(); }
+  });
+  App.actions.bulkClear = () => { S.sel = new Set(); App.$$('[data-sel]').forEach(c => { c.checked = false; }); App.updateBulk(); };
+  App.actions.bulkEdit = () => {
+    const ids = Array.from(S.sel || []); if (!ids.length) return;
+    const M = App.masters().data, en = App.masters().enums;
+    const keep = (name, label, opts, canClear) => '<div class="field"><label for="b_' + name + '">' + label + '</label><select id="b_' + name + '" name="' + name + '"><option value="__keep__">— ไม่เปลี่ยน —</option>' + (canClear ? '<option value="__clear__">(ล้างค่า)</option>' : '') + opts.map(o => '<option value="' + esc(o.v) + '">' + esc(o.l) + '</option>').join('') + '</select></div>';
+    const act = (tbl, k) => App.activeOpts(tbl, 'Code', 'Name').map(o => ({ v: o.v, l: o.v + '. ' + o.l }));
+    const html = '<p>แก้ไข <b>' + ids.length + '</b> แผนพร้อมกัน — เลือกเฉพาะช่องที่ต้องการเปลี่ยน (ช่องที่เป็น "ไม่เปลี่ยน" จะคงค่าเดิม)</p><div class="form-grid">' +
+      keep('Status', 'สถานะแผน', (en.planStatuses || []).map(s => ({ v: s, l: s })), false) +
+      keep('Owner', 'ผู้รับผิดชอบ', (M.people || []).filter(p => p.Active !== false).map(p => ({ v: p.Name, l: p.Name })), false) +
+      keep('Department', 'กลุ่มงาน', (M.departments || []).filter(d => d.Active !== false).map(d => ({ v: d.Name, l: d.Name })), true) +
+      keep('PlanType', 'ประเภทแผน', App.activeOpts('planTypes'), true) +
+      keep('StrategyMoph', 'ยุทธศาสตร์กระทรวง', act('moph'), true) + keep('StrategyMission', 'พันธกิจ สสจ.', act('mission'), true) + keep('StrategyHosp', 'ยุทธศาสตร์ รพ.', act('hosp'), true) +
+      App.field({ name: 'Note', label: 'หมายเหตุ (เว้นว่าง = ไม่เปลี่ยน)', value: '' }) +
+      App.field({ name: 'reason', label: 'เหตุผลการแก้ไข', type: 'textarea', value: '', full: true, hint: 'จำเป็นเมื่อเปลี่ยนสถานะสำคัญของแผนที่อนุมัติแล้ว (เช่น ยกเลิก/กลับเป็นร่าง)' }) + '</div>';
+    App.modal({ title: 'แก้ไขหลายแผนพร้อมกัน', html: html, wide: true, submitLabel: 'ใช้กับ ' + ids.length + ' แผน',
+      onSubmit: async d => {
+        const v = App.values(d), changes = {};
+        ['Status', 'Owner', 'Department', 'PlanType', 'StrategyMoph', 'StrategyMission', 'StrategyHosp'].forEach(k => { if (v[k] && v[k] !== '__keep__') changes[k] = v[k]; });
+        if (v.Note) changes.Note = v.Note;
+        if (!Object.keys(changes).length) throw new Error('ยังไม่ได้เลือกช่องที่จะแก้ไข');
+        if (!(await App.confirm('ยืนยันแก้ไข ' + ids.length + ' แผน: ' + Object.keys(changes).length + ' ช่อง ?', 'ยืนยัน'))) return false;
+        const r = await App.api('plans.bulk', { planIds: ids, changes: changes, reason: v.reason });
+        if (r.failed) { d.showError('สำเร็จ ' + r.updated + ' แผน · ไม่สำเร็จ ' + r.failed + ' แผน: ' + r.errors.map(x => String(x.name).substring(0, 40) + ' — ' + x.error).join(' | ')); S.sel = new Set(r.errors.map(x => x.planId)); App.render(); return false; }
+        App.toast('แก้ไข ' + r.updated + ' แผนแล้ว', 'success'); S.sel = new Set(); App.render();
+      } });
+  };
+  function dupModal(ids, fromYear) {
+    const next = String((parseInt(fromYear, 10) || parseInt(S.year, 10)) + 1);
+    App.modal({ title: 'คัดลอก/ยกแผนไปปีงบประมาณใหม่', submitLabel: 'คัดลอก ' + ids.length + ' แผน',
+      html: '<p>คัดลอก <b>' + ids.length + '</b> แผน พร้อมกิจกรรมและรายการงบ (ไม่คัดลอกการเบิกจ่ายและการปรับงบ) สถานะเริ่มต้นเป็น "ร่าง" และเลขลำดับต่อจากปีปลายทางอัตโนมัติ</p><div class="form-grid">' +
+        App.field({ name: 'toYear', label: 'ปีงบประมาณปลายทาง (พ.ศ.)', value: next, required: true, attrs: ' inputmode="numeric" maxlength="4"' }) +
+        App.field({ name: 'shiftDates', label: 'เลื่อนวันที่กิจกรรมไปตามปีงบประมาณ', type: 'checkbox', value: true, full: true }) +
+        App.field({ name: 'skipExcluded', label: 'ไม่คัดลอกกิจกรรมที่ยกเลิก/ไม่เบิก/ไม่ใช้งบประมาณ', type: 'checkbox', value: true, full: true }) + '</div>',
+      onSubmit: async d => {
+        const v = App.values(d);
+        const r = await App.api('plans.duplicate', { planIds: ids, toYear: String(v.toYear).trim(), shiftDates: !!v.shiftDates, skipExcluded: !!v.skipExcluded });
+        App.toast('คัดลอก ' + r.plans + ' แผน (' + r.activities + ' กิจกรรม) ไปปี ' + v.toYear + ' แล้ว', 'success');
+        S.sel = new Set(); S.year = String(v.toYear).trim();
+        if (location.hash === '#/plans') App.render(); else location.hash = '#/plans';
+      } });
+  }
+  App.actions.bulkDup = () => { const ids = Array.from(S.sel || []); if (ids.length) dupModal(ids, S.year); };
+  App.actions.dupPlanOne = () => dupModal([S.cur.plan.PlanId], S.cur.plan.Year);
 })();
