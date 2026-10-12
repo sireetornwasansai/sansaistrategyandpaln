@@ -27,7 +27,7 @@
  * =====================================================================================
  */
 
-var APP_VERSION = '2.0.0';
+var APP_VERSION = '2.1.0';
 var TZ_ = 'Asia/Bangkok';
 
 // ---------------------------------------------------------------------------------
@@ -1181,6 +1181,7 @@ function plansSave_(user, p) {
   if (!name) fail_('VALIDATION', 'กรุณากรอกชื่อแผนงาน/โครงการ');
   if (!owner) fail_('VALIDATION', 'กรุณาระบุผู้รับผิดชอบ');
   var dept = str_(pick('Department'));
+  if (!dept) { var pr = readAll_('People').filter(function (x) { return String(x.Name).trim() === owner && x.Department; })[0]; if (pr) dept = String(pr.Department); }
   if (dept && !findBy_('Departments', 'Name', dept)) fail_('VALIDATION', 'ไม่พบกลุ่มงานนี้ในข้อมูลหลัก');
   var type = str_(pick('PlanType'));
   if (type && !findBy_('PlanTypes', 'Code', type)) fail_('VALIDATION', 'ประเภทแผนไม่ถูกต้อง');
@@ -1769,6 +1770,58 @@ function overdueList_(user, p) {
   });
 }
 
+
+/** งานของฉัน: แผน/กิจกรรมของผู้ใช้ที่ล็อกอิน (ผูกด้วย Users.PersonName) — แอดมินระบุ p.owner เพื่อดูของผู้อื่นได้ */
+function myWork_(user, p) {
+  var year = p.year || getSettings_().CurrentYear;
+  var owner = (user.Role === 'admin' && str_(p.owner)) ? str_(p.owner) : str_(user.PersonName);
+  if (!owner) return { linked: false, owner: '', year: String(year), message: 'บัญชีนี้ยังไม่ได้ผูกกับชื่อผู้รับผิดชอบ — แจ้งแอดมินให้ใส่อีเมลของท่านในข้อมูลหลัก › ผู้รับผิดชอบ' };
+  var fm = fundMap_(), today = todayIso_();
+  var mine = buildModel_(year).filter(function (m) { return String(m.plan.Owner) === owner; }).sort(function (a, b) { return planOrder_(a, b, fm); });
+  var ids = {}; mine.forEach(function (m) { ids[m.plan.PlanId] = true; });
+  var upcoming = [], noDate = [], noBudget = [], tot = { planned: 0, active: 0, paid: 0 };
+  mine.forEach(function (m) {
+    tot.planned += m.calc.plannedBudget; tot.active += m.calc.activeBudget; tot.paid += m.calc.netPaid;
+    var done = bool_(m.plan.SummarySent) || ['ยกเลิก', 'ปิด'].indexOf(m.plan.Status) >= 0;
+    m.items.forEach(function (x) {
+      if (x.calc.excluded) return;
+      var base = { planId: m.plan.PlanId, plan: m.plan.Name, actId: x.act.ActId, no: String(x.act.No), name: x.act.Name, budget: x.calc.plannedBudget, paid: x.calc.netPaid };
+      var s = dstr_(x.act.PlanStart), e = dstr_(x.act.PlanEnd) || s;
+      if (!s) { if (!done) noDate.push(base); }
+      else if (!done) {
+        var toStart = daysBetween_(today, s), toEnd = daysBetween_(today, e);
+        if (toEnd >= 0 && toStart <= 30) { base.start = s; base.end = e; base.inDays = toStart; base.ongoing = toStart <= 0; base.unpaid = x.calc.plannedBudget > 0 && x.calc.netPaid < x.calc.plannedBudget - 0.5; upcoming.push(base); }
+        else if (toEnd < 0 && x.calc.plannedBudget > 0 && x.calc.netPaid < x.calc.plannedBudget - 0.5) { base.start = s; base.end = e; base.lateDays = -toEnd; base.pastUnpaid = true; upcoming.push(base); }
+      }
+      if (x.act.Status === 'ปกติ' && x.calc.plannedBudget <= 0 && !done) noBudget.push(base);
+    });
+  });
+  upcoming.sort(function (a, b) { return (b.pastUnpaid ? 1 : 0) - (a.pastUnpaid ? 1 : 0) || String(a.start).localeCompare(String(b.start)); });
+  var fix = readAll_('FixQueue').filter(function (f) { return !bool_(f.Resolved) && f.PlanId && ids[f.PlanId]; }).length;
+  return {
+    linked: true, owner: owner, year: String(year), today: today,
+    totals: { plans: mine.length, planned: round2_(tot.planned), active: round2_(tot.active), paid: round2_(tot.paid), pct: tot.active > 0 ? round2_(tot.paid / tot.active * 100) : 0 },
+    plans: mine.map(planBrief_),
+    overdue: mine.filter(function (m) { return m.overdue.is; }).map(function (m) { return { planId: m.plan.PlanId, name: m.plan.Name, reason: m.overdue.reason, daysLate: m.overdue.daysLate }; }),
+    upcoming: upcoming.slice(0, 60), noDate: noDate.slice(0, 60), noBudget: noBudget.slice(0, 60), fixCount: fix
+  };
+}
+
+/** เติมกลุ่มงานของแผนที่ยังว่าง จากชีต People (รันมือใน Apps Script หลังกรอก People.Department แล้ว) */
+function fillPlanDepartments() {
+  CACHE_ = {};
+  var ppl = {}; readAll_('People').forEach(function (x) { if (x.Name && x.Department) ppl[String(x.Name).trim()] = x.Department; });
+  var n = 0, miss = [];
+  readAll_('Plans').forEach(function (pl) {
+    if (str_(pl.Department) || bool_(pl.IsDeleted)) return;
+    var d = ppl[String(pl.Owner).trim()];
+    if (d) { pl.Department = d; update_('Plans', pl._row, pl); n++; } else miss.push(pl.Owner);
+  });
+  invalidate_('Plans');
+  Logger.log('เติมกลุ่มงานให้ ' + n + ' แผน · ไม่พบกลุ่มงานของ: ' + Array.from(new Set(miss)).join(', '));
+  return n;
+}
+
 /** ส่งออกรายงานเป็นแท็บในชีตฐานข้อมูล หน้าตาใกล้เคียงชีทเดิม (แยกตามแหล่งเงิน) */
 function reportExport_(admin, p) {
   var year = p.year || getSettings_().CurrentYear, fm = fundMap_(), model = buildModel_(year);
@@ -1818,6 +1871,7 @@ var ACTIONS_ = {
   'plans.get':        { role: 'viewer', fn: plansGet_ },
   'dashboard':        { role: 'viewer', fn: dashboard_ },
   'overdue.list':     { role: 'viewer', fn: overdueList_ },
+  'mywork':           { role: 'viewer', fn: myWork_ },
   'fix.list':         { role: 'viewer', fn: fixList_ },
   'history.list':     { role: 'viewer', fn: historyList_ },
 

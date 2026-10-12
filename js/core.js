@@ -184,5 +184,5 @@
     if (fn) { e.preventDefault(); Promise.resolve(fn(el, e)).catch(App.fail); }
   });
 
-  App.CATS_COLORS = ['#0e7c7b', '#f0ad4e', '#5b8def', '#e0607e', '#8e6bd8', '#3fb68b', '#9aa5b1', '#d97a3a'];
+  App.CATS_COLORS = ['#4f46e5', '#0891b2', '#7c3aed', '#059669', '#f59e0b', '#e11d48', '#64748b', '#2563eb'];
 })();

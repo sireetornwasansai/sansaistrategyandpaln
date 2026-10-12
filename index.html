@@ -2,13 +2,13 @@
 <html lang="th">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#0e7c7b">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#4f46e5">
   <meta name="robots" content="noindex,nofollow">
   <title>ระบบบริหารแผนงาน/โครงการ</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" crossorigin="anonymous">
   <link rel="stylesheet" href="assets/style.css">
   <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -24,7 +24,7 @@
       <div class="login-left">
         <div class="circle circle-1"></div><div class="circle circle-2"></div><div class="circle circle-3"></div>
         <h2>WELCOME</h2>
-        <h4>Strategy &amp; Project Plan</h4>
+        <h4>Project Intelligence</h4>
         <p id="login-org">โรงพยาบาลสันทราย จังหวัดเชียงใหม่<br>ระบบบริหารแผนงาน/โครงการ ช่วยให้การจัดการงบประมาณ การเบิกจ่าย และการติดตามผลเป็นเรื่องง่ายและมีประสิทธิภาพ</p>
       </div>
       <div class="login-right">
@@ -44,19 +44,34 @@
   <div id="app" hidden>
     <aside id="sidebar" class="sidebar">
       <div class="sidebar-header" id="side-head">
-        <div class="brand-logo"><i class="fas fa-hospital"></i></div>
-        <h5>รพ.สันทราย</h5>
-        <small>Strategy &amp; Project Plan</small>
-        <div id="user-chip"></div>
+        <div class="brand"><span class="brand-logo"><i class="fas fa-hospital"></i></span><div class="brand-word">NEXA<small>PROJECT INTELLIGENCE</small></div></div>
+        <div class="workspace"><span class="ws-ico"><i class="fas fa-briefcase"></i></span><div><strong id="ws-name">รพ.สันทราย</strong><small>Strategy &amp; Project Plan</small></div></div>
       </div>
-      <nav id="nav"></nav>
+      <nav id="nav" aria-label="เมนูหลัก"></nav>
+      <div class="sidebar-foot" id="user-chip"></div>
     </aside>
     <div id="backdrop" class="backdrop" data-act="closeMenu"></div>
     <div class="main">
-      <header class="topbar"><b>ระบบบริหารแผนงาน/โครงการ</b><button class="icon-btn menu-btn" data-act="menu" aria-label="เมนู"><i class="fas fa-bars"></i></button></header>
+      <header class="topbar">
+        <div class="tb-left">
+          <button class="icon-btn menu-btn" data-act="menu" aria-label="เมนู"><i class="fas fa-bars"></i></button>
+          <div class="crumb"><span>Workspace</span><i class="fas fa-chevron-right"></i><b id="crumb">ภาพรวม</b></div>
+        </div>
+        <div class="tb-right">
+          <span class="year-chip"><i class="fas fa-calendar-alt"></i> <span id="tb-year"></span></span>
+          <a class="icon-btn" href="#/overdue" aria-label="รายการค้างส่ง" title="ค้างส่งสรุป"><i class="fas fa-bell"></i><span class="notify-dot" id="tb-dot" hidden></span></a>
+          <span id="tb-avatar"></span>
+        </div>
+      </header>
       <main id="view" class="view" tabindex="-1"></main>
-      <footer class="foot">ระบบบริหารแผนงาน/โครงการ โรงพยาบาลสันทราย จังหวัดเชียงใหม่</footer>
+      <footer class="foot">NEXA · ระบบบริหารแผนงาน/โครงการ โรงพยาบาลสันทราย จังหวัดเชียงใหม่</footer>
     </div>
+    <nav class="mobile-nav" aria-label="เมนูมือถือ">
+      <a class="mn-item" data-nav="dashboard" href="#/dashboard"><i class="fas fa-chart-line"></i>ภาพรวม</a>
+      <a class="mn-item" data-nav="plans" href="#/plans"><i class="fas fa-tasks"></i>แผนงาน</a>
+      <a class="mn-item" data-nav="overdue" href="#/overdue"><i class="fas fa-clock"></i>ค้างส่ง</a>
+      <button class="mn-item" data-act="menu"><i class="fas fa-bars"></i>ทั้งหมด</button>
+    </nav>
   </div>
 
   <script src="config.js"></script>

@@ -5,11 +5,13 @@
 
   // ---------------------------------------------------------------- เมนู
   const NAV = [
+    { sep: 'WORKSPACE' },
+    { id: 'mywork', label: 'งานของฉัน', icon: 'fa-user-check', hash: '#/mywork' },
     { id: 'dashboard', label: 'ภาพรวม', icon: 'fa-chart-line', hash: '#/dashboard' },
     { id: 'plans', label: 'แผนงาน/โครงการ', icon: 'fa-tasks', hash: '#/plans' },
     { id: 'overdue', label: 'ค้างส่งสรุป', icon: 'fa-clock', hash: '#/overdue' },
     { id: 'fix', label: 'ข้อมูลรอแก้ไข', icon: 'fa-screwdriver-wrench', hash: '#/fix' },
-    { sep: 'แอดมิน', admin: true },
+    { sep: 'ADMIN', admin: true },
     { id: 'users', label: 'ผู้ใช้งาน', icon: 'fa-users', hash: '#/admin/users', admin: true, badge: 'pendingUsers' },
     { id: 'masters', label: 'ข้อมูลหลัก/ตั้งค่า', icon: 'fa-gear', hash: '#/admin/masters', admin: true },
     { id: 'reports', label: 'รายงาน/ส่งออก', icon: 'fa-print', hash: '#/admin/reports', admin: true },
@@ -20,18 +22,21 @@
       '<a class="nav-item" data-nav="' + n.id + '" href="' + n.hash + '"><span class="ico"><i class="fas ' + n.icon + '"></i></span><span>' + esc(n.label) + '</span>' + (n.badge ? '<span class="nav-badge" data-badge="' + n.badge + '" hidden></span>' : '') + '</a>').join('');
     const u = S.user;
     const roleTh = { admin: 'แอดมิน', user: 'เจ้าหน้าที่', viewer: 'ผู้ดูข้อมูล' }[u.role] || u.role;
-    $('#user-chip').innerHTML = '<div class="role-badge">' + esc(roleTh) + '</div>' +
-      '<div class="user-mini">' + (u.picture ? '<img class="avatar" src="' + esc(u.picture) + '" alt="" referrerpolicy="no-referrer">' : '<span class="avatar">' + esc((u.name || u.email).charAt(0)) + '</span>') +
+    const av = u.picture ? '<img class="avatar" src="' + esc(u.picture) + '" alt="" referrerpolicy="no-referrer">' : '<span class="avatar">' + esc((u.name || u.email || '?').charAt(0)) + '</span>';
+    $('#user-chip').innerHTML = '<div class="role-badge">' + esc(roleTh) + '</div><div class="user-mini">' + av +
       '<span class="nm" title="' + esc(u.email || '') + '">' + esc(u.name || u.email) + '</span></div>' +
       '<button class="btn-logout" id="btn-logout"><i class="fas fa-sign-out-alt"></i> ออกจากระบบ</button>';
+    $('#tb-avatar').innerHTML = av;
     $('#btn-logout').addEventListener('click', () => App.logout());
+    if (cfg.ORG_NAME) $('#ws-name').textContent = cfg.ORG_NAME.replace('โรงพยาบาล', 'รพ.');
     App.updateBadges();
   }
-  App.updateBadges = function () { App.$$('[data-badge]').forEach(b => { const n = S[b.dataset.badge] || 0; b.textContent = n; b.hidden = !n; }); };
+  App.updateBadges = function () { App.$$('[data-badge]').forEach(b => { const n = S[b.dataset.badge] || 0; b.textContent = n; b.hidden = !n; }); const d = $('#tb-dot'); if (d) d.hidden = !(S.pendingUsers > 0); };
 
   // ---------------------------------------------------------------- เราต์เตอร์
   const ROUTES = [
     { re: /^#?\/?$|^#\/dashboard$/, page: 'dashboard', nav: 'dashboard' },
+    { re: /^#\/mywork$/, page: 'mywork', nav: 'mywork' },
     { re: /^#\/plans$/, page: 'plans', nav: 'plans' },
     { re: /^#\/plan\/([\w-]+)$/, page: 'plan', nav: 'plans' },
     { re: /^#\/overdue$/, page: 'overdue', nav: 'overdue' },
@@ -47,7 +52,8 @@
     const seq = ++renderSeq, view = $('#view'), hash = location.hash || '#/dashboard';
     App.destroyCharts && App.destroyCharts();
     const route = ROUTES.find(r => r.re.test(hash));
-    App.$$('.nav-item').forEach(a => a.classList.toggle('on', !!route && a.dataset.nav === route.nav));
+    App.$$('.nav-item,.mn-item[data-nav]').forEach(a => a.classList.toggle('on', !!route && a.dataset.nav === route.nav));
+    const nv = NAV.find(n => route && n.id === route.nav); $('#crumb').textContent = nv ? nv.label : 'NEXA'; $('#tb-year').textContent = 'ปีงบ ' + (S.year || '');
     closeSidebar();
     if (!route) { view.innerHTML = '<div class="card empty"><h2>ไม่พบหน้านี้</h2><a class="btn" href="#/dashboard">กลับหน้าภาพรวม</a></div>'; return; }
     if (route.admin && !App.isAdmin()) { view.innerHTML = '<div class="card empty"><h2>เฉพาะแอดมิน</h2><p class="muted">ท่านไม่มีสิทธิ์เข้าหน้านี้</p></div>'; return; }

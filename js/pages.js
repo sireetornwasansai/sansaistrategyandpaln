@@ -7,9 +7,9 @@
 
   App.charts = [];
   App.destroyCharts = () => { App.charts.forEach(c => { try { c.destroy(); } catch (e) { /* ignore */ } }); App.charts = []; };
-  const mkChart = (id, cfg) => { const el = document.getElementById(id); if (!el || typeof Chart === 'undefined') return; App.charts.push(new Chart(el, cfg)); };
+  const mkChart = (id, cfg) => { if (typeof Chart !== 'undefined') { Chart.defaults.font.family = '"IBM Plex Sans Thai", Inter, sans-serif'; Chart.defaults.color = '#53627c'; Chart.defaults.borderColor = '#eceff7'; } const el = document.getElementById(id); if (!el || typeof Chart === 'undefined') return; App.charts.push(new Chart(el, cfg)); };
 
-  const HEAD_ICON = { 'ภาพรวมแผนงาน/โครงการ': 'fa-chart-line', 'แผนงาน/โครงการ': 'fa-tasks', 'ค้างส่งสรุปโครงการ': 'fa-clock', 'ข้อมูลรอแก้ไข': 'fa-screwdriver-wrench',
+  const HEAD_ICON = { 'ภาพรวมแผนงาน/โครงการ': 'fa-chart-line', 'แผนงาน/โครงการ': 'fa-tasks', 'ค้างส่งสรุปโครงการ': 'fa-clock', 'งานของฉัน': 'fa-user-check', 'ข้อมูลรอแก้ไข': 'fa-screwdriver-wrench',
     'ผู้ใช้งาน': 'fa-users', 'ข้อมูลหลัก / ตั้งค่า': 'fa-gear', 'ประวัติการใช้งานระบบ': 'fa-shield-alt', 'รายงาน / ส่งออก': 'fa-print' };
   const pageHead = (title, sub, actions) => '<div class="page-head"><div><h1>' + (HEAD_ICON[title] ? '<i class="fas ' + HEAD_ICON[title] + '"></i>' : '') + '<span>' + esc(title) + '</span></h1>' + (sub ? '<p class="muted">' + sub + '</p>' : '') + '</div><div class="head-actions">' + (actions || '') + '</div></div>';
   const skeleton = () => '<div class="skeleton-wrap"><div class="skeleton sk-h"></div><div class="cards"><div class="skeleton sk-c"></div><div class="skeleton sk-c"></div><div class="skeleton sk-c"></div></div><div class="skeleton sk-b"></div></div>';
@@ -37,9 +37,8 @@
     if (d.pendingUsers) alerts.push('<a class="alert info" href="#/admin/users"><b>' + d.pendingUsers + '</b> ผู้ใช้รออนุมัติ <span>อนุมัติ →</span></a>');
     if (C.fixOpen) alerts.push('<a class="alert gray" href="#/fix"><b>' + C.fixOpen + '</b> รายการข้อมูลรอแก้ไข <span>แก้ไข →</span></a>');
     if (C.actsNoDate) alerts.push('<div class="alert gray"><b>' + C.actsNoDate + '</b> กิจกรรม (งบ ' + App.money(C.actsNoDateBudget, 0) + ') ยังไม่ระบุวันที่ดำเนินการ — วางแผนกระแสเงินสดไม่ได้</div>');
-    view.innerHTML =
-      pageHead('ภาพรวมแผนงาน/โครงการ', 'ปีงบประมาณ ' + esc(d.year) + ' · ' + (d.scope === 'hospital' ? 'เฉพาะงบของ รพ. (ไม่รวมเขตสุขภาพที่ 1)' : 'ทุกแหล่งเงิน'),
-        yearSelect() + '<label class="inline-field"><span>ขอบเขต</span><select data-change="scope"><option value="hospital"' + (d.scope === 'hospital' ? ' selected' : '') + '>เฉพาะ รพ.</option><option value="all"' + (d.scope === 'all' ? ' selected' : '') + '>ทุกแหล่งเงิน</option></select></label>') +
+    const hero = '<section class="hero"><div class="eyebrow"><i></i> YOUR PORTFOLIO, AT A GLANCE</div><h1>ทุกแผนงาน ชัดเจนในที่เดียว<span>.</span></h1><p>ปีงบประมาณ ' + esc(d.year) + ' · ' + (d.scope === 'hospital' ? 'เฉพาะงบของ รพ. (ไม่รวมเขตสุขภาพที่ 1)' : 'ทุกแหล่งเงิน') + ' · เบิกจ่ายแล้ว ' + App.pct(T.rate) + ' ของงบที่ใช้จริง</p><div class="hero-tools">' + yearSelect() + '<label class="inline-field"><span>ขอบเขต</span><select data-change="scope"><option value="hospital"' + (d.scope === 'hospital' ? ' selected' : '') + '>เฉพาะ รพ.</option><option value="all"' + (d.scope === 'all' ? ' selected' : '') + '>ทุกแหล่งเงิน</option></select></label></div></section>';
+    view.innerHTML = hero +
       (alerts.length ? '<div class="alerts">' + alerts.join('') + '</div>' : '') +
       '<div class="cards kpis">' +
         kpi('งบตามแผน', App.money(T.plannedBudget, 0), T.plans + ' แผนงาน', '', 'fa-layer-group') +
@@ -62,13 +61,13 @@
         '<div><b>' + C.disbNoEvidence + '</b><span>รายการเบิกที่ยังไม่แนบหลักฐาน</span></div></div></section>';
 
     mkChart('ch-monthly', { data: { labels: App.FY_MONTHS, datasets: [
-      { type: 'bar', label: 'งบตามแผน', data: d.monthly.planned, backgroundColor: '#9ad4d2', order: 2 },
-      { type: 'bar', label: 'เบิกจ่าย', data: d.monthly.paid, backgroundColor: '#0e7c7b', order: 2 },
-      { type: 'line', label: 'เบิกสะสม', data: d.monthly.cumulativePaid, borderColor: '#e0607e', backgroundColor: '#e0607e', yAxisID: 'y2', tension: .25, order: 1 }] },
+      { type: 'bar', label: 'งบตามแผน', data: d.monthly.planned, backgroundColor: '#c4b5fd', order: 2 },
+      { type: 'bar', label: 'เบิกจ่าย', data: d.monthly.paid, backgroundColor: '#4f46e5', order: 2 },
+      { type: 'line', label: 'เบิกสะสม', data: d.monthly.cumulativePaid, borderColor: '#0891b2', backgroundColor: '#0891b2', yAxisID: 'y2', tension: .25, order: 1 }] },
       options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, scales: { y: { ticks: { callback: v => App.money(v, 0) } }, y2: { position: 'right', grid: { drawOnChartArea: false }, ticks: { callback: v => App.money(v, 0) } } }, plugins: { legend: { position: 'bottom' } } } });
     const ex = d.execCount, exL = Object.keys(ex);
-    mkChart('ch-exec', { type: 'doughnut', data: { labels: exL, datasets: [{ data: exL.map(k => ex[k]), backgroundColor: ['#3fb68b', '#f0ad4e', '#c3ccd4', '#e5e9ed'], borderWidth: 2 }] }, options: { responsive: true, maintainAspectRatio: false, cutout: '62%', plugins: { legend: { position: 'bottom' } } } });
-    mkChart('ch-fund', { type: 'bar', data: { labels: d.byFund.map(f => f.name), datasets: [{ label: 'งบที่ใช้จริง', data: d.byFund.map(f => f.activeBudget), backgroundColor: '#9ad4d2' }, { label: 'เบิกจ่าย', data: d.byFund.map(f => f.netPaid), backgroundColor: '#0e7c7b' }] },
+    mkChart('ch-exec', { type: 'doughnut', data: { labels: exL, datasets: [{ data: exL.map(k => ex[k]), backgroundColor: ['#059669', '#f59e0b', '#a5b4fc', '#e2e8f0'], borderWidth: 2 }] }, options: { responsive: true, maintainAspectRatio: false, cutout: '62%', plugins: { legend: { position: 'bottom' } } } });
+    mkChart('ch-fund', { type: 'bar', data: { labels: d.byFund.map(f => f.name), datasets: [{ label: 'งบที่ใช้จริง', data: d.byFund.map(f => f.activeBudget), backgroundColor: '#c4b5fd' }, { label: 'เบิกจ่าย', data: d.byFund.map(f => f.netPaid), backgroundColor: '#4f46e5' }] },
       options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, scales: { x: { ticks: { callback: v => App.money(v, 0) } } }, plugins: { legend: { position: 'bottom' } } } });
     S.stratLevel = S.stratLevel || 'mission';
     App.drawStrategy = function () {
@@ -76,7 +75,7 @@
       const old = App.charts.find(c => c.canvas === el); if (old) { old.destroy(); App.charts = App.charts.filter(c => c !== old); }
       const rows = d.strategy[S.stratLevel] || [];
       const sel = $('select[data-change="stratLevel"]'); if (sel) sel.value = S.stratLevel;
-      mkChart('ch-strat', { type: 'bar', data: { labels: rows.map(r => (r.code ? r.code + ' ' : '') + String(r.name).slice(0, 26)), datasets: [{ label: 'งบที่ใช้จริง', data: rows.map(r => r.activeBudget), backgroundColor: '#9ad4d2' }, { label: 'เบิกจ่าย', data: rows.map(r => r.netPaid), backgroundColor: '#0e7c7b' }] },
+      mkChart('ch-strat', { type: 'bar', data: { labels: rows.map(r => (r.code ? r.code + ' ' : '') + String(r.name).slice(0, 26)), datasets: [{ label: 'งบที่ใช้จริง', data: rows.map(r => r.activeBudget), backgroundColor: '#c4b5fd' }, { label: 'เบิกจ่าย', data: rows.map(r => r.netPaid), backgroundColor: '#4f46e5' }] },
         options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, scales: { x: { ticks: { callback: v => App.money(v, 0) } } }, plugins: { legend: { position: 'bottom' } } } });
     };
     App.drawStrategy();
@@ -157,11 +156,38 @@
       (g.locked ? '<div class="alert warn"><b>🔒 แผนนี้อยู่ในสถานะ "ปิด"</b> ' + (App.isAdmin() ? 'แอดมินยังแก้ไขได้' : 'แก้ไขได้เฉพาะแอดมิน — ติดต่อแอดมินหากต้องการเปิดแก้ไข') + '</div>' : '') +
       (edit && g.reasonRequired ? '<div class="alert info">แผนนี้อนุมัติแล้ว — การแก้ไขงบ/สถานะ/ลบรายการ ต้องระบุเหตุผล และจะถูกบันทึกในประวัติการแก้ไข</div>' : '') +
       (g.overdue.is ? '<div class="alert warn"><b>ค้างส่งสรุปโครงการ</b> ' + esc(g.overdue.reason) + '</div>' : '') +
+      (edit ? readyCard(g) : '') +
       '<div class="cards kpis">' + kp('งบตามแผน', App.money(c.plannedBudget, 0), '', 'fa-layer-group') + kp('งบที่ใช้จริง', App.money(c.activeBudget, 0), '', 'fa-wallet') + kp('เบิกจ่ายสุทธิ', App.money(c.netPaid, 0), 'accent', 'fa-money-bill-wave') + kp('คงเหลือ', App.money(c.remaining, 0), '', 'fa-piggy-bank') + kp('ปลดล็อกได้', App.money(c.released, 0), c.released ? 'warn' : '', 'fa-unlock') + kp('ร้อยละ', App.pct(c.pct) + App.progress(c.pct), '', 'fa-chart-pie') + '</div>' +
       '<div class="section-head"><h2>กิจกรรม (' + g.activities.length + ')</h2>' + (edit ? '<button class="btn primary" data-act="newAct"><i class="fas fa-plus"></i> เพิ่มกิจกรรม</button>' : '') + '</div>' +
       (g.activities.length ? g.activities.map(a => actCard(a, edit, g.activities.length <= 5)).join('') : '<div class="card empty">ยังไม่มีกิจกรรม' + (edit ? ' — กด "เพิ่มกิจกรรม" เพื่อเริ่มวางงบ' : '') + '</div>') +
       deletedPanel(g, edit) + planLevel(g, edit);
   };
+
+  // ===================================================================== ตรวจความพร้อมของแผน (ฝั่งหน้าเว็บ)
+  function readiness(g) {
+    const p = g.plan, acts = g.activities || [], fund = App.fund(p.FundCode), out = [];
+    const live = acts.filter(a => !(a.calc && a.calc.excluded));
+    if (!acts.length) out.push(['bad', 'ยังไม่มีกิจกรรม', 'เพิ่มกิจกรรมอย่างน้อย 1 รายการ']);
+    const nb = live.filter(a => a.act.Status === 'ปกติ' && !(a.calc.plannedBudget > 0));
+    if (nb.length) out.push(['bad', nb.length + ' กิจกรรมสถานะ "ปกติ" แต่ไม่มีงบ', 'ใส่หมวดงบ หรือเปลี่ยนสถานะเป็น "ไม่ใช้งบประมาณ"']);
+    const nd = live.filter(a => !a.act.PlanStart);
+    if (nd.length) out.push(['warn', nd.length + ' กิจกรรมยังไม่มีวันที่', 'ระบบจะแจ้งเตือนใกล้กำหนดและแสดงในปฏิทินไม่ได้']);
+    if (!p.Department) out.push(['warn', 'ยังไม่ระบุกลุ่มงาน', 'จำเป็นสำหรับรายงานรายกลุ่มงาน/ภารกิจ']);
+    if (!p.PlanType) out.push(['warn', 'ยังไม่ระบุประเภทแผน', 'ใช้จัดกลุ่มรายงาน']);
+    if (!(fund && fund.StrategySet === 'region')) {
+      const miss = [['StrategyMoph', 'ยุทธศาสตร์กระทรวง'], ['StrategyMission', 'พันธกิจ สสจ.'], ['StrategyProv', 'ยุทธศาสตร์ สสจ.'], ['StrategyHosp', 'ยุทธศาสตร์ รพ.']].filter(x => !p[x[0]]).map(x => x[1]);
+      if (miss.length) out.push(['warn', 'ยังไม่ระบุ: ' + miss.join(', '), 'ต้องครบทั้ง 4 ระดับตามแบบ สสจ.']);
+    }
+    const noPaidDate = (g.activities || []).reduce((n, a) => n + (a.disbs || []).filter(d => !d.PaidDate).length, 0);
+    if (noPaidDate && p.Status !== 'ร่าง') out.push(['info', noPaidDate + ' งวดเบิกจ่ายยังไม่มีวันจ่ายจริง/หลักฐาน', 'ผู้รับผิดชอบควรยืนยันงวดและแนบหลักฐาน']);
+    return out;
+  }
+  function readyCard(g) {
+    const r = readiness(g), ico = { bad: 'fa-circle-xmark', warn: 'fa-triangle-exclamation', info: 'fa-circle-info' };
+    if (!r.length) return '<div class="card ready ok"><i class="fas fa-circle-check"></i><div><b>ข้อมูลแผนครบถ้วน</b><span class="muted small"> พร้อมใช้ออกรายงาน</span></div></div>';
+    return '<details class="card ready" open><summary><b>ตรวจความพร้อมของแผน</b> <span class="badge ' + (r.some(x => x[0] === 'bad') ? 'red' : 'amber') + '">' + r.length + ' ประเด็น</span></summary><ul>' +
+      r.map(x => '<li class="' + x[0] + '"><i class="fas ' + ico[x[0]] + '"></i><div><b>' + esc(x[1]) + '</b><span class="muted small">' + esc(x[2]) + '</span></div></li>').join('') + '</ul></details>';
+  }
   function deletedPanel(g, edit) {
     const del = g.deletedActivities || [];
     if (!edit || !del.length) return '';
@@ -321,6 +347,34 @@
   App.actions.delAdj = async el => { if (await App.confirm(((findAdj(el.dataset.id) || {}).TransferId) ? 'ยกเลิกการโอนย้ายงบนี้ ? (ระบบจะลบรายการทั้งฝั่งต้นทางและปลายทางพร้อมกัน)' : 'ลบรายการนี้ ?', 'ลบ', true)) { await App.apiReason('adj.delete', { adjId: el.dataset.id }); App.toast('ลบแล้ว', 'success'); reload(); } };
 
   // ===================================================================== ค้างส่งสรุป
+
+  // ===================================================================== งานของฉัน
+  App.pages.mywork = async function (view) {
+    view.innerHTML = skeleton();
+    const d = await App.api('mywork', { year: S.year });
+    if (!d.linked) {
+      view.innerHTML = pageHead('งานของฉัน', 'ปีงบประมาณ ' + esc(S.year), yearSelect()) +
+        '<div class="card empty"><i class="fas fa-link-slash" style="font-size:28px;opacity:.5"></i><p><b>บัญชีนี้ยังไม่ผูกกับผู้รับผิดชอบ</b></p><p class="muted">' + esc(d.message) + '</p></div>';
+      return;
+    }
+    const t = d.totals;
+    const kp = (l, v, cls, ico) => '<div class="card kpi sm ' + (cls || '') + '"><div class="kpi-text"><span class="kpi-label">' + l + '</span><b class="kpi-val">' + v + '</b></div><div class="icon-box"><i class="fas ' + ico + '"></i></div></div>';
+    const when = x => x.pastUnpaid ? '<span class="badge red">เลยกำหนด ' + x.lateDays + ' วัน</span>' : x.ongoing ? '<span class="badge green">กำลังดำเนินการ</span>' : '<span class="badge amber">อีก ' + x.inDays + ' วัน</span>';
+    const actRow = x => '<tr><td><a href="#/plan/' + esc(x.planId) + '">' + esc(x.plan) + '</a><div class="muted small">' + esc(x.name) + '</div></td><td class="nowrap">' + App.date(x.start) + (x.end && x.end !== x.start ? ' – ' + App.date(x.end) : '') + '</td><td class="num">' + App.money(x.budget, 0) + '</td><td>' + when(x) + (x.unpaid && !x.pastUnpaid ? ' <span class="badge">ยังไม่เบิก</span>' : '') + '</td></tr>';
+    const tbl = (head, rows, empty) => '<div class="card table-card"><div class="table-wrap"><table class="table slim"><thead><tr>' + head.map(h => '<th>' + h + '</th>').join('') + '</tr></thead><tbody>' + (rows.length ? rows.join('') : '<tr><td colspan="' + head.length + '" class="empty">' + empty + '</td></tr>') + '</tbody></table></div></div>';
+    const todo = [];
+    d.overdue.forEach(o => todo.push('<tr><td><a href="#/plan/' + esc(o.planId) + '">' + esc(o.name) + '</a></td><td>' + esc(o.reason) + (o.daysLate ? ' <span class="badge red">' + o.daysLate + ' วัน</span>' : '') + '</td></tr>'));
+    view.innerHTML = pageHead('งานของฉัน', 'ผู้รับผิดชอบ: <b>' + esc(d.owner) + '</b> · ปีงบประมาณ ' + esc(d.year), yearSelect()) +
+      '<div class="cards kpis">' + kp('แผนที่รับผิดชอบ', t.plans, '', 'fa-tasks') + kp('งบที่ใช้จริง', App.money(t.active, 0), '', 'fa-wallet') + kp('เบิกจ่ายสุทธิ', App.money(t.paid, 0), 'accent', 'fa-money-bill-wave') +
+      kp('ร้อยละเบิกจ่าย', App.pct(t.pct) + App.progress(t.pct), '', 'fa-chart-pie') + kp('ค้างส่งสรุป', d.overdue.length, d.overdue.length ? 'warn' : '', 'fa-clock') + kp('รอแก้ไข', d.fixCount, d.fixCount ? 'warn' : '', 'fa-screwdriver-wrench') + '</div>' +
+      '<div class="section-head"><h2>กิจกรรมที่ต้องติดตาม (30 วันข้างหน้า / เลยกำหนดยังไม่เบิก)</h2></div>' +
+      tbl(['แผน / กิจกรรม', 'ช่วงเวลา', 'งบ (บาท)', 'สถานะ'], d.upcoming.map(actRow), 'ไม่มีกิจกรรมที่ต้องติดตามในช่วงนี้ 🎉') +
+      (todo.length ? '<div class="section-head"><h2>ค้างส่งสรุปโครงการ</h2></div>' + tbl(['แผน', 'เหตุผล'], todo, '') : '') +
+      (d.noDate.length ? '<details class="card"><summary><b>กิจกรรมที่ยังไม่มีวันที่ (' + d.noDate.length + ')</b> <span class="muted small">— เติมวันที่เพื่อให้ระบบเตือนได้</span></summary><table class="table slim"><tbody>' + d.noDate.map(x => '<tr><td><a href="#/plan/' + esc(x.planId) + '">' + esc(x.plan) + '</a></td><td class="muted">' + esc(x.name) + '</td></tr>').join('') + '</tbody></table></details>' : '') +
+      (d.noBudget.length ? '<details class="card"><summary><b>กิจกรรมสถานะปกติแต่ไม่มีงบ (' + d.noBudget.length + ')</b></summary><table class="table slim"><tbody>' + d.noBudget.map(x => '<tr><td><a href="#/plan/' + esc(x.planId) + '">' + esc(x.plan) + '</a></td><td class="muted">' + esc(x.name) + '</td></tr>').join('') + '</tbody></table></details>' : '') +
+      '<div class="section-head"><h2>แผนของฉัน (' + d.plans.length + ')</h2></div>' +
+      tbl(['แผนงาน', 'แหล่งเงิน', 'งบที่ใช้จริง', 'เบิกสุทธิ', 'ความคืบหน้า', 'สถานะ'], d.plans.map(x => '<tr><td><a href="#/plan/' + esc(x.plan.PlanId) + '">' + esc(x.plan.Name) + '</a></td><td><span class="tag">' + esc(App.fundName(x.plan.FundCode)) + '</span></td><td class="num">' + App.money(x.calc.activeBudget, 0) + '</td><td class="num">' + App.money(x.calc.netPaid, 0) + '</td><td>' + App.pct(x.calc.pct) + App.progress(x.calc.pct) + '</td><td>' + App.badge(x.plan.Status) + '</td></tr>'), 'ยังไม่มีแผนงานในปีนี้');
+  };
   App.pages.overdue = async function (view) {
     view.innerHTML = skeleton();
     const list = await App.api('overdue.list', { year: S.year });
