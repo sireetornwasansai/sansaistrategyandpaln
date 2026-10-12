@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0e7c7b">
+  <meta name="robots" content="noindex,nofollow">
+  <title>ระบบบริหารแผนงาน/โครงการ</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/style.css">
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+</head>
+<body>
+  <noscript><p style="padding:2rem;font-family:sans-serif">กรุณาเปิดใช้งาน JavaScript เพื่อใช้ระบบนี้</p></noscript>
+  <div id="busybar"></div>
+
+  <!-- ===== หน้าเข้าสู่ระบบ ===== -->
+  <section id="login-screen" hidden>
+    <div class="login-card">
+      <div class="login-logo">🏥</div>
+      <h1 id="login-title">ระบบบริหารแผนงาน/โครงการ</h1>
+      <p class="muted" id="login-org"></p>
+      <div class="login-sep"><span>เข้าสู่ระบบด้วยบัญชี Gmail</span></div>
+      <div id="g-btn" class="g-btn"></div>
+      <div id="login-spin" hidden><div class="spinner"></div><p class="muted">กำลังตรวจสอบสิทธิ์…</p></div>
+      <div id="login-msg" class="login-msg" hidden></div>
+      <p class="login-foot">ผู้ใช้ใหม่ต้องได้รับการอนุมัติจากผู้ดูแลระบบก่อนจึงจะเข้าใช้งานได้</p>
+    </div>
+  </section>
+
+  <!-- ===== แอป ===== -->
+  <div id="app" hidden>
+    <aside id="sidebar" class="sidebar">
+      <div class="brand"><span class="brand-ico">🏥</span><div><b>รพ.สันทราย</b><span>แผนงาน/โครงการ</span></div></div>
+      <nav id="nav"></nav>
+      <div id="user-chip" class="user-chip"></div>
+    </aside>
+    <div id="backdrop" class="backdrop" data-act="closeMenu"></div>
+    <div class="main">
+      <header class="topbar"><button class="icon-btn menu-btn" data-act="menu" aria-label="เมนู">☰</button><b>แผนงาน/โครงการ รพ.สันทราย</b></header>
+      <main id="view" class="view" tabindex="-1"></main>
+      <footer class="foot">ระบบบริหารแผนงาน/โครงการ โรงพยาบาลสันทราย จังหวัดเชียงใหม่</footer>
+    </div>
+  </div>
+
+  <script src="config.js"></script>
+  <script src="js/core.js"></script>
+  <script src="js/pages.js"></script>
+  <script src="js/admin.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
