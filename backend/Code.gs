@@ -27,7 +27,7 @@
  * =====================================================================================
  */
 
-var APP_VERSION = '2.1.0';
+var APP_VERSION = '2.2.0';
 var TZ_ = 'Asia/Bangkok';
 
 // ---------------------------------------------------------------------------------
@@ -725,14 +725,14 @@ function loginGoogle_(p) {
   }
 
   if (u.Status !== 'approved') {
-    u.Picture = claims.picture || u.Picture; update_('Users', u._row, u);
+    u.Picture = keepAvatar_(u, claims); update_('Users', u._row, u);
     var msg = u.Status === 'pending' ? 'บัญชีของท่านอยู่ระหว่างรอผู้ดูแลระบบอนุมัติ'
       : u.Status === 'rejected' ? 'คำขอของท่านไม่ได้รับอนุมัติ กรุณาติดต่อผู้ดูแลระบบ'
       : 'บัญชีของท่านถูกระงับการใช้งาน กรุณาติดต่อผู้ดูแลระบบ';
     return { status: u.Status, message: msg, email: email, name: u.Name };
   }
 
-  u.LastLoginAt = now; u.Picture = claims.picture || u.Picture;
+  u.LastLoginAt = now; u.Picture = keepAvatar_(u, claims);
   if (!u.Name) u.Name = claims.name || email;
   if (!u.PersonName) { var pp = linkPersonName_(email); if (pp) { u.PersonName = pp.Name; if (!u.Department) u.Department = pp.Department; } }
   update_('Users', u._row, u);
@@ -1866,6 +1866,7 @@ function reportExport_(admin, p) {
 // ---------------------------------------------------------------------------------
 var ACTIONS_ = {
   'me':               { role: 'viewer', fn: function (u) { return meInfo_(u); } },
+  'me.avatar':        { role: 'viewer', write: true, fn: meAvatar_ },
   'masters.get':      { role: 'viewer', fn: function () { return mastersGet_(); } },
   'plans.list':       { role: 'viewer', fn: plansList_ },
   'plans.get':        { role: 'viewer', fn: plansGet_ },
@@ -1902,6 +1903,25 @@ var ACTIONS_ = {
   'audit.list':       { role: 'admin', fn: auditList_ },
   'report.export':    { role: 'admin', write: true, fn: reportExport_ }
 };
+
+
+/** รูปที่ผู้ใช้อัปโหลดเอง (data URL) ต้องไม่ถูกทับด้วยรูป Google ตอนล็อกอิน */
+function keepAvatar_(u, claims) {
+  return String(u.Picture || '').indexOf('data:image/') === 0 ? u.Picture : (claims.picture || u.Picture || '');
+}
+/** me.avatar: ตั้ง/ลบรูปประจำตัวของตนเอง (รับ data URL ที่ย่อแล้วจากหน้าเว็บ ≤ 45,000 อักขระ ตามข้อจำกัดเซลล์ชีต) */
+function meAvatar_(user, p) {
+  var img = String(p.image || '');
+  if (img) {
+    if (img.length > 45000) fail_('VALIDATION', 'รูปใหญ่เกินไป');
+    if (!/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+\/=]+$/.test(img)) fail_('VALIDATION', 'รูปแบบรูปภาพไม่ถูกต้อง');
+  }
+  var u = userRow_(user.Email);
+  if (!u) fail_('NOT_FOUND', 'ไม่พบบัญชีผู้ใช้');
+  u.Picture = img; update_('Users', u._row, u);
+  audit_(user.Email, img ? 'เปลี่ยนรูปประจำตัว' : 'ลบรูปประจำตัว', 'User', user.Email, '');
+  return { picture: img };
+}
 
 function meInfo_(u) {
   var s = getSettings_(), out = { user: publicUser_(u), version: APP_VERSION, currentYear: s.CurrentYear };

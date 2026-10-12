@@ -17,12 +17,14 @@
     { id: 'reports', label: 'รายงาน/ส่งออก', icon: 'fa-print', hash: '#/admin/reports', admin: true },
     { id: 'audit', label: 'ประวัติการใช้งาน', icon: 'fa-shield-alt', hash: '#/admin/audit', admin: true }
   ];
+  App.buildNav = function () { buildNav(); };
   function buildNav() {
     $('#nav').innerHTML = NAV.filter(n => !n.admin || App.isAdmin()).map(n => n.sep ? '<div class="nav-sep">' + n.sep + '</div>' :
       '<a class="nav-item" data-nav="' + n.id + '" href="' + n.hash + '"><span class="ico"><i class="fas ' + n.icon + '"></i></span><span>' + esc(n.label) + '</span>' + (n.badge ? '<span class="nav-badge" data-badge="' + n.badge + '" hidden></span>' : '') + '</a>').join('');
     const u = S.user;
     const roleTh = { admin: 'แอดมิน', user: 'เจ้าหน้าที่', viewer: 'ผู้ดูข้อมูล' }[u.role] || u.role;
-    const av = u.picture ? '<img class="avatar" src="' + esc(u.picture) + '" alt="" referrerpolicy="no-referrer">' : '<span class="avatar">' + esc((u.name || u.email || '?').charAt(0)) + '</span>';
+    const av0 = u.picture ? '<img class="avatar" src="' + esc(u.picture) + '" alt="" referrerpolicy="no-referrer">' : '<span class="avatar">' + esc((u.name || u.email || '?').charAt(0)) + '</span>';
+    const av = '<button type="button" class="avatar-btn" data-act="profile" title="เปลี่ยนรูปประจำตัว" aria-label="เปลี่ยนรูปประจำตัว">' + av0 + '</button>';
     $('#user-chip').innerHTML = '<div class="role-badge">' + esc(roleTh) + '</div><div class="user-mini">' + av +
       '<span class="nm" title="' + esc(u.email || '') + '">' + esc(u.name || u.email) + '</span></div>' +
       '<button class="btn-logout" id="btn-logout"><i class="fas fa-sign-out-alt"></i> ออกจากระบบ</button>';
@@ -53,7 +55,7 @@
     App.destroyCharts && App.destroyCharts();
     const route = ROUTES.find(r => r.re.test(hash));
     App.$$('.nav-item,.mn-item[data-nav]').forEach(a => a.classList.toggle('on', !!route && a.dataset.nav === route.nav));
-    const nv = NAV.find(n => route && n.id === route.nav); $('#crumb').textContent = nv ? nv.label : 'NEXA'; $('#tb-year').textContent = 'ปีงบ ' + (S.year || '');
+    const nv = NAV.find(n => route && n.id === route.nav); $('#crumb').textContent = nv ? nv.label : 'SANSAI Strategy & Plan'; $('#tb-year').textContent = 'ปีงบ ' + (S.year || '');
     closeSidebar();
     if (!route) { view.innerHTML = '<div class="card empty"><h2>ไม่พบหน้านี้</h2><a class="btn" href="#/dashboard">กลับหน้าภาพรวม</a></div>'; return; }
     if (route.admin && !App.isAdmin()) { view.innerHTML = '<div class="card empty"><h2>เฉพาะแอดมิน</h2><p class="muted">ท่านไม่มีสิทธิ์เข้าหน้านี้</p></div>'; return; }
