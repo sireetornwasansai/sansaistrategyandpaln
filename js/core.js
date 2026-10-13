@@ -41,7 +41,18 @@
 
   // ---------- เรียก API ----------
   let busyN = 0;
-  function busy(d) { busyN += d; const el = $('#busybar'); if (el) el.classList.toggle('on', busyN > 0); }
+  let busyTimer = null;
+  function busyHint(on) {
+    let h = document.getElementById('busyhint');
+    if (!h) { h = document.createElement('div'); h.id = 'busyhint'; h.setAttribute('role', 'status'); h.setAttribute('aria-live', 'polite'); h.innerHTML = '<span class="spinner sm"></span><span>กำลังประมวลผล… เซิร์ฟเวอร์อาจใช้เวลาสักครู่ (โดยเฉพาะการเรียกครั้งแรก) กรุณาอย่าปิดหน้านี้</span>'; document.body.appendChild(h); }
+    h.classList.toggle('on', on);
+  }
+  function busy(d) {
+    busyN = Math.max(0, busyN + d); const el = $('#busybar'); if (el) el.classList.toggle('on', busyN > 0);
+    document.body.classList.toggle('is-busy', busyN > 0);
+    if (busyN > 0 && !busyTimer) busyTimer = setTimeout(() => busyHint(true), 5000);
+    if (busyN === 0) { clearTimeout(busyTimer); busyTimer = null; busyHint(false); }
+  }
   App.api = async function (action, params, opts) {
     opts = opts || {};
     if (!cfg.API_URL || /YOUR_DEPLOYMENT_ID/.test(cfg.API_URL)) throw new Error('ยังไม่ได้ตั้งค่า API_URL ในไฟล์ config.js');
@@ -65,6 +76,21 @@
       throw e;
     } finally { clearTimeout(to); busy(-1); }
   };
+  // ลองใหม่อัตโนมัติ (สูงสุด 2 ครั้ง) เฉพาะคำสั่ง "อ่านข้อมูล" เมื่อเครือข่ายหลุด/หมดเวลา — คำสั่งเขียนข้อมูลไม่ลองซ้ำเอง กันบันทึกซ้ำ
+  const apiOnce = App.api, READ_RE = /(\.list|\.get|\.summary|\.recent)$|^(me|dashboard|mywork|overdue|ping)$/;
+  App.api = async function (action, params, opts) {
+    for (let i = 0; ; i++) {
+      try { return await apiOnce(action, params, opts); }
+      catch (e) { if (READ_RE.test(action) && i < 2 && /เชื่อมต่อเซิร์ฟเวอร์ไม่ได้|หมดเวลา/.test((e && e.message) || '')) { await new Promise(r => setTimeout(r, 900 * (i + 1))); continue; } throw e; }
+    }
+  };
+  // แถบแจ้งเมื่อไม่มีอินเทอร์เน็ต
+  (function () {
+    const bar = document.createElement('div'); bar.id = 'offline-banner'; bar.setAttribute('role', 'alert'); bar.hidden = true;
+    bar.textContent = 'ไม่มีสัญญาณอินเทอร์เน็ต — ข้อมูลที่เห็นอาจไม่ล่าสุด และจะบันทึกไม่ได้จนกว่าจะเชื่อมต่อใหม่';
+    const sync = () => { bar.hidden = navigator.onLine !== false; if (!bar.isConnected && document.body) document.body.appendChild(bar); };
+    window.addEventListener('online', sync); window.addEventListener('offline', sync); document.addEventListener('DOMContentLoaded', sync);
+  })();
 
   // ---------- Toast ----------
   App.toast = function (msg, type) {
@@ -92,10 +118,16 @@
     form.addEventListener('submit', async e => {
       e.preventDefault(); if (!o.onSubmit) return;
       const btn = d.querySelector('[data-submit]'); d.showError('');
-      if (btn) { btn.disabled = true; btn.dataset.t = btn.textContent; btn.textContent = 'กำลังบันทึก…'; }
+      d.querySelectorAll('.invalid').forEach(x => { x.classList.remove('invalid'); x.removeAttribute('aria-invalid'); });
+      const bad = Array.prototype.slice.call(d.querySelectorAll('[required]')).find(el => !String(el.value || '').trim());
+      if (bad) { // ตรวจช่องที่จำเป็นก่อนส่ง (ฝั่งเซิร์ฟเวอร์ตรวจซ้ำเสมอ)
+        const lb = d.querySelector('label[for="' + bad.id + '"]'); bad.classList.add('invalid'); bad.setAttribute('aria-invalid', 'true');
+        d.showError('กรุณากรอก "' + (lb ? lb.textContent.replace('*', '').trim() : bad.name) + '"'); try { bad.focus(); } catch (e2) { /* ignore */ } return;
+      }
+      if (btn) { btn.classList.add('loading'); btn.disabled = true; btn.dataset.t = btn.textContent; btn.textContent = 'กำลังบันทึก…'; }
       try { const r = await o.onSubmit(d); if (r !== false) closeDialog(d); }
       catch (err) { d.showError(err && err.message ? err.message : String(err)); }
-      finally { if (btn && btn.isConnected) { btn.disabled = false; btn.textContent = btn.dataset.t; } }
+      finally { if (btn && btn.isConnected) { btn.classList.remove('loading'); btn.disabled = false; btn.textContent = btn.dataset.t; } }
     });
     d.close_ = () => closeDialog(d);
     openDialog(d); if (o.onOpen) o.onOpen(d);
@@ -158,7 +190,7 @@
     return new Promise((resolve, reject) => {
       const ext = (file.name.split('.').pop() || '').toLowerCase();
       if (EXT_OK.indexOf(ext) < 0) return reject(new Error('รองรับเฉพาะไฟล์ PDF, รูปภาพ, Word, Excel'));
-      if (file.size > 10 * 1024 * 1024) return reject(new Error('ไฟล์ใหญ่เกิน 10MB'));
+      const mb = ((M().limits || {}).maxUploadMb) || 10; if (file.size > mb * 1024 * 1024) return reject(new Error('ไฟล์ใหญ่เกิน ' + mb + 'MB'));
       const fr = new FileReader();
       fr.onerror = () => reject(new Error('อ่านไฟล์ไม่สำเร็จ'));
       fr.onload = () => App.api('file.upload', { name: file.name, data: String(fr.result) }).then(resolve, reject);
@@ -181,7 +213,15 @@
   document.addEventListener('click', e => {
     const el = e.target.closest('[data-act]'); if (!el) return;
     const fn = App.actions[el.getAttribute('data-act')];
-    if (fn) { e.preventDefault(); Promise.resolve(fn(el, e)).catch(App.fail); }
+    if (!fn) return;
+    e.preventDefault();
+    if (el.classList.contains('loading')) return; // กำลังทำงานอยู่ — กันกดซ้ำ
+    let r; try { r = fn(el, e); } catch (err) { App.fail(err); return; }
+    if (r && typeof r.then === 'function') { // ปุ่มที่ทำงานแบบ async: แสดงสถานะกำลังทำงานจนเสร็จ (สากลทุกปุ่ม data-act)
+      const isBtn = el.tagName === 'BUTTON', styled = isBtn || el.classList.contains('btn');
+      if (styled) { el.classList.add('loading'); el.setAttribute('aria-busy', 'true'); if (isBtn) el.disabled = true; }
+      Promise.resolve(r).catch(App.fail).finally(() => { el.classList.remove('loading'); el.removeAttribute('aria-busy'); if (isBtn && el.isConnected) el.disabled = false; });
+    }
   });
 
   App.CATS_COLORS = ['#1d4f91', '#0e7c7b', '#3f6ea8', '#059669', '#f59e0b', '#e11d48', '#64748b', '#2bb3b0'];

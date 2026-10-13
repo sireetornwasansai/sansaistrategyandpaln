@@ -7,15 +7,35 @@
   const NAV = [
     { sep: 'WORKSPACE' },
     { id: 'mywork', label: 'งานของฉัน', icon: 'fa-user-check', hash: '#/mywork' },
-    { id: 'dashboard', label: 'ภาพรวม', icon: 'fa-chart-line', hash: '#/dashboard' },
-    { id: 'plans', label: 'แผนงาน/โครงการ', icon: 'fa-tasks', hash: '#/plans' },
+    { id: 'dashboard', label: 'ภาพรวมผู้บริหาร', icon: 'fa-chart-line', hash: '#/dashboard' },
+    { id: 'plans', label: 'โครงการทั้งหมด', icon: 'fa-folder-open', hash: '#/plans' },
+    { id: 'strategy', label: 'แผนงานและกลยุทธ์', icon: 'fa-bullseye', hash: '#/strategy' },
+    { id: 'tasks', label: 'งานและสิ่งที่ต้องทำ', icon: 'fa-list-check', hash: '#/tasks' },
+    { id: 'timeline', label: 'แผนเวลาโครงการ', icon: 'fa-timeline', hash: '#/timeline' },
+    { id: 'milestones', label: 'หมุดหมายสำคัญ', icon: 'fa-flag', hash: '#/milestones' },
     { id: 'overdue', label: 'ค้างส่งสรุป', icon: 'fa-clock', hash: '#/overdue' },
+    { sep: 'FINANCE & GOVERNANCE' },
+    { id: 'budget', label: 'งบประมาณ', icon: 'fa-wallet', hash: '#/budget' },
+    { id: 'expenses', label: 'ค่าใช้จ่าย', icon: 'fa-receipt', hash: '#/expenses' },
+    { id: 'approvals', label: 'คำขออนุมัติ', icon: 'fa-clipboard-check', hash: '#/approvals' },
+    { id: 'risks', label: 'บริหารความเสี่ยง', icon: 'fa-triangle-exclamation', hash: '#/risks' },
+    { id: 'issues', label: 'ปัญหาและอุปสรรค', icon: 'fa-circle-exclamation', hash: '#/issues' },
+    { sep: 'COLLABORATION' },
+    { id: 'resources', label: 'ทรัพยากร', icon: 'fa-boxes-stacked', hash: '#/resources' },
+    { id: 'team', label: 'ทีมและผู้รับผิดชอบ', icon: 'fa-people-group', hash: '#/team' },
+    { id: 'documents', label: 'เอกสารโครงการ', icon: 'fa-file-lines', hash: '#/documents' },
+    { id: 'meetings', label: 'การประชุม', icon: 'fa-calendar-check', hash: '#/meetings' },
+    { sep: 'INSIGHTS & SYSTEM' },
+    { id: 'report', label: 'รายงานผู้บริหาร', icon: 'fa-chart-column', hash: '#/report' },
+    { id: 'alerts', label: 'ศูนย์แจ้งเตือน', icon: 'fa-bell', hash: '#/alerts' },
+    { id: 'activity', label: 'ประวัติการทำรายการ', icon: 'fa-clock-rotate-left', hash: '#/activity' },
+    { id: 'archive', label: 'คลังโครงการ', icon: 'fa-box-archive', hash: '#/archive' },
     { id: 'fix', label: 'ข้อมูลรอแก้ไข', icon: 'fa-screwdriver-wrench', hash: '#/fix' },
+    { id: 'masters', label: 'ตั้งค่าระบบ', icon: 'fa-gear', hash: '#/admin/masters', admin: true },
     { sep: 'ADMIN', admin: true },
     { id: 'users', label: 'ผู้ใช้งาน', icon: 'fa-users', hash: '#/admin/users', admin: true, badge: 'pendingUsers' },
-    { id: 'masters', label: 'ข้อมูลหลัก/ตั้งค่า', icon: 'fa-gear', hash: '#/admin/masters', admin: true },
     { id: 'reports', label: 'รายงาน/ส่งออก', icon: 'fa-print', hash: '#/admin/reports', admin: true },
-    { id: 'audit', label: 'ประวัติการใช้งาน', icon: 'fa-shield-alt', hash: '#/admin/audit', admin: true }
+    { id: 'audit', label: 'ประวัติการใช้งานระบบ', icon: 'fa-shield-alt', hash: '#/admin/audit', admin: true }
   ];
   App.buildNav = function () { buildNav(); };
   function buildNav() {
@@ -39,6 +59,23 @@
   const ROUTES = [
     { re: /^#?\/?$|^#\/dashboard$/, page: 'dashboard', nav: 'dashboard' },
     { re: /^#\/mywork$/, page: 'mywork', nav: 'mywork' },
+    { re: /^#\/strategy$/, page: 'strategy', nav: 'strategy' },
+    { re: /^#\/tasks$/, page: 'tasks', nav: 'tasks' },
+    { re: /^#\/timeline$/, page: 'timeline', nav: 'timeline' },
+    { re: /^#\/milestones$/, page: 'milestones', nav: 'milestones' },
+    { re: /^#\/budget$/, page: 'budget', nav: 'budget' },
+    { re: /^#\/expenses$/, page: 'expenses', nav: 'expenses' },
+    { re: /^#\/approvals$/, page: 'approvals', nav: 'approvals' },
+    { re: /^#\/risks$/, page: 'risks', nav: 'risks' },
+    { re: /^#\/issues$/, page: 'issues', nav: 'issues' },
+    { re: /^#\/resources$/, page: 'resources', nav: 'resources' },
+    { re: /^#\/team$/, page: 'team', nav: 'team' },
+    { re: /^#\/documents$/, page: 'documents', nav: 'documents' },
+    { re: /^#\/meetings$/, page: 'meetings', nav: 'meetings' },
+    { re: /^#\/report$/, page: 'report', nav: 'report' },
+    { re: /^#\/alerts$/, page: 'alerts', nav: 'alerts' },
+    { re: /^#\/activity$/, page: 'activity', nav: 'activity' },
+    { re: /^#\/archive$/, page: 'archive', nav: 'archive' },
     { re: /^#\/plans$/, page: 'plans', nav: 'plans' },
     { re: /^#\/plan\/([\w-]+)$/, page: 'plan', nav: 'plans' },
     { re: /^#\/overdue$/, page: 'overdue', nav: 'overdue' },
@@ -60,12 +97,20 @@
     if (!route) { view.innerHTML = '<div class="card empty"><h2>ไม่พบหน้านี้</h2><a class="btn" href="#/dashboard">กลับหน้าภาพรวม</a></div>'; return; }
     if (route.admin && !App.isAdmin()) { view.innerHTML = '<div class="card empty"><h2>เฉพาะแอดมิน</h2><p class="muted">ท่านไม่มีสิทธิ์เข้าหน้านี้</p></div>'; return; }
     const m = hash.match(route.re);
+    view.setAttribute('aria-busy', 'true');
     try { await App.pages[route.page](view, m && m[1]); }
     catch (e) {
       if (seq !== renderSeq) return;
       view.innerHTML = '<div class="card error-card"><h2>โหลดข้อมูลไม่สำเร็จ</h2><p>' + esc(e.message || e) + '</p><button class="btn primary" data-act="retry">ลองใหม่</button></div>';
     }
-    if (seq === renderSeq) window.scrollTo(0, 0);
+    if (seq === renderSeq) {
+      view.setAttribute('aria-busy', 'false');
+      view.querySelectorAll('input:not([type=hidden]):not([aria-label]),select:not([aria-label]),textarea:not([aria-label])').forEach(el => { // ป้ายกำกับสำหรับโปรแกรมอ่านหน้าจอ
+        if ((el.id && view.querySelector('label[for="' + el.id + '"]')) || el.closest('label')) return;
+        const t = el.placeholder || (el.options && el.options[0] && el.options[0].textContent) || el.name; if (t) el.setAttribute('aria-label', t);
+      });
+      window.scrollTo(0, 0);
+    }
   };
   App.actions.retry = () => App.render();
   window.addEventListener('hashchange', () => App.render());
@@ -77,7 +122,8 @@
   // ---------------------------------------------------------------- เริ่มระบบหลังล็อกอิน
   App.start = async function () {
     const [masters, me] = await Promise.all([App.api('masters.get'), App.api('me')]);
-    S.masters = masters; S.user = me.user; S.pendingUsers = me.pendingUsers || 0;
+    S.masters = masters; S.user = me.user; S.maintenance = !!me.maintenance;
+    (function () { let b = document.getElementById('maint-banner'); if (!b) { b = document.createElement('div'); b.id = 'maint-banner'; b.setAttribute('role', 'status'); b.textContent = 'ระบบอยู่ระหว่างปิดปรับปรุงชั่วคราว — ดูข้อมูลได้ แต่ยังบันทึกการแก้ไขไม่ได้ (เฉพาะแอดมินบันทึกได้)'; document.body.appendChild(b); } b.hidden = !me.maintenance; })(); S.pendingUsers = me.pendingUsers || 0;
     S.year = S.year || masters.settings.CurrentYear;
     App.saveSession();
     $('#login-screen').hidden = true; $('#app').hidden = false;
