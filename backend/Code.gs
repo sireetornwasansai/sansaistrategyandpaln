@@ -33,10 +33,10 @@
  * =====================================================================================
  */
 
-var APP_VERSION = '2.7.0';
+var APP_VERSION = '2.8.0';
 var TZ_ = (function () { try { return PropertiesService.getScriptProperties().getProperty('TIMEZONE') || 'Asia/Bangkok'; } catch (e) { return 'Asia/Bangkok'; } })();
 /** ค่าตั้งต้นของ Script Properties ที่ปรับได้ (ไม่ตั้ง = ใช้ค่านี้) — setupSheet() จะเขียนค่าเหล่านี้ลง Script Properties ให้เห็นและแก้ได้ */
-var PROP_DEFAULTS_ = { TIMEZONE: 'Asia/Bangkok', ORG_NAME: 'โรงพยาบาลสันทราย จังหวัดเชียงใหม่', SESSION_HOURS: '12', MAX_UPLOAD_MB: '10',
+var PROP_DEFAULTS_ = { TIMEZONE: 'Asia/Bangkok', ORG_NAME: 'โรงพยาบาลสันทราย จังหวัดเชียงใหม่', SESSION_HOURS: '12', MAX_UPLOAD_MB: '10', MAX_ATTACH_MB: '20', MAX_ATTACH_PER_PLAN: '50',
   ALERT_SOON_DAYS: '7', ALERT_PAY_DAYS: '30', RISK_HIGH_SCORE: '15', RISK_MID_SCORE: '8', IMPORTANCE_HIGH_BAHT: '500000', IMPORTANCE_MID_BAHT: '100000', MAINTENANCE_MODE: 'FALSE' };
 
 // ---------------------------------------------------------------------------------
@@ -69,7 +69,9 @@ var SCHEMA_ = {
   AuditLog:       ['Time', 'Email', 'Action', 'Entity', 'EntityId', 'Detail'],
   ChangeLog:      ['Time', 'Email', 'Entity', 'EntityId', 'PlanId', 'Field', 'Old', 'New', 'Reason'],
   Records:        ['RecId', 'Kind', 'PlanId', 'Title', 'Detail', 'Owner', 'Status', 'Priority', 'Date', 'Likelihood', 'Impact', 'Url',
-                   'IsDeleted', 'CreatedAt', 'CreatedBy', 'UpdatedAt', 'UpdatedBy']
+                   'IsDeleted', 'CreatedAt', 'CreatedBy', 'UpdatedAt', 'UpdatedBy'],
+  // v2.8: เอกสารแนบของแผนงาน/โครงการ (Kind = file | link · Origin = upload | drive | link)
+  Attachments:    ['AttId', 'PlanId', 'Kind', 'Title', 'Url', 'FileId', 'FileName', 'MimeType', 'Size', 'Origin', 'Note', 'IsDeleted', 'CreatedAt', 'CreatedBy']
 };
 
 // คอลัมน์ที่ต้องเก็บเป็น "ข้อความ" (กันชีตแปลงเป็นวันที่/ตัวเลขเอง) และคอลัมน์ตัวเลขเงิน
@@ -556,7 +558,7 @@ function ss_() {
 function sheet_(name) {
   if (!SCHEMA_[name]) throw new Error('ไม่รู้จักชีต ' + name);
   var sh = ss_().getSheetByName(name);
-  if (!sh && name === 'Records') { sh = ensureSheet_(name, { created: [], fixed: [], warnings: [] }); } // v2.4: ชีตใหม่สร้างให้เอง
+  if (!sh && (name === 'Records' || name === 'Attachments')) { sh = ensureSheet_(name, { created: [], fixed: [], warnings: [] }); } // v2.4: ชีตใหม่สร้างให้เอง
   if (!sh) throw new Error('ยังไม่มีชีต "' + name + '" กรุณารัน setupSheet() ก่อน');
   var mk = 'm_' + name;
   if (!CACHE_[mk]) { // v2.3: ชีตเดิมที่ยังไม่มีคอลัมน์ใหม่ (เช่น Activities.Progress) -> ขยายและเติมหัวตารางให้เอง
@@ -1001,7 +1003,7 @@ var MASTERS_ = {
 };
 
 function mastersGet_() {
-  var out = { schema: {}, data: {}, limits: { maxUploadMb: cfgNum_('MAX_UPLOAD_MB') }, settings: getSettings_(), enums: { planStatuses: PLAN_STATUSES_, actStatuses: ACT_STATUSES_, adjTypes: ADJ_TYPES_, roles: ROLES_, userStatuses: USER_STATUSES_, actExcluded: ACT_EXCLUDED_ } };
+  var out = { schema: {}, data: {}, limits: { maxUploadMb: cfgNum_('MAX_UPLOAD_MB'), maxAttachMb: cfgNum_('MAX_ATTACH_MB'), maxAttachPerPlan: cfgNum_('MAX_ATTACH_PER_PLAN'), blockedExt: ATT_BLOCKED_EXT_ }, settings: getSettings_(), enums: { planStatuses: PLAN_STATUSES_, actStatuses: ACT_STATUSES_, adjTypes: ADJ_TYPES_, roles: ROLES_, userStatuses: USER_STATUSES_, actExcluded: ACT_EXCLUDED_ } };
   Object.keys(MASTERS_).forEach(function (k) {
     var m = MASTERS_[k];
     out.schema[k] = { label: m.label, key: m.key, cols: m.cols };
@@ -1221,7 +1223,8 @@ function plansList_(user, p) {
     if (q && (String(m.plan.Name) + ' ' + String(m.plan.Owner) + ' ' + String(m.plan.ProjectTitle)).toLowerCase().indexOf(q) < 0) return false;
     return true;
   }).sort(function (a, b) { return planOrder_(a, b, fm); });
-  return { year: String(year), plans: res.map(planBrief_) };
+  var cnt = {}; readAll_('Attachments').forEach(function (a) { if (!bool_(a.IsDeleted)) cnt[a.PlanId] = (cnt[a.PlanId] || 0) + 1; });
+  return { year: String(year), plans: res.map(function (m) { var o = planBrief_(m); o.attCount = cnt[m.plan.PlanId] || 0; return o; }) };
 }
 
 function plansGet_(user, p) {
@@ -1231,7 +1234,7 @@ function plansGet_(user, p) {
   var brief = planBrief_(m);
   var planDisbs = readAll_('Disbursements').filter(function (d) { return d.PlanId === p.planId && !d.ActId; }).map(disbOut_);
   return { plan: brief.plan, calc: brief.calc, overdue: brief.overdue, activities: m.items.map(actFull_), planAdjs: m.planAdjs.map(adjOut_),
-    planDisbs: planDisbs,
+    planDisbs: planDisbs, attachments: attListFor_(p.planId),
     canEdit: canEditPlan_(user, pl) && !(pl.Status === 'ปิด' && user.Role !== 'admin' && getSettings_().LockClosedPlans === 'TRUE'),
     locked: pl.Status === 'ปิด' && getSettings_().LockClosedPlans === 'TRUE',
     reasonRequired: reasonRequired_(pl),
@@ -1846,6 +1849,159 @@ function fileUpload_(user, p) {
 }
 
 // ---------------------------------------------------------------------------------
+// เอกสารแนบของแผนงาน/โครงการ (v2.8)
+//   • ไฟล์ทุกชนิด -> อัปโหลดเข้าโฟลเดอร์ Drive ของระบบ (แยกโฟลเดอร์ต่อแผน) แล้วเก็บลิงก์ + ลิงก์ดูออนไลน์ (/preview)
+//   • ลิงก์ภายนอก รวมถึงลิงก์ Google Drive/Docs/Sheets/Slides ที่แชร์ไว้แล้ว (ตรวจสิทธิ์แชร์เท่าที่ระบบเข้าถึงได้)
+//   • ไม่ลบไฟล์ใน Drive เมื่อลบรายการ (ลบแบบซ่อน) เพื่อกันเอกสารราชการหาย
+// ---------------------------------------------------------------------------------
+var ATT_BLOCKED_EXT_ = ['exe', 'bat', 'cmd', 'com', 'scr', 'msi', 'msp', 'dll', 'sys', 'vbs', 'vbe', 'js', 'jse', 'wsf', 'wsh', 'ps1', 'psm1', 'jar', 'apk', 'app', 'dmg', 'sh', 'bash',
+  'lnk', 'reg', 'hta', 'cpl', 'scf', 'pif', 'iso', 'crx', 'html', 'htm', 'xhtml', 'svg', 'docm', 'xlsm', 'pptm', 'dotm', 'xltm', 'potm', 'ppam', 'xlam'];
+var ATT_MIME_ = { webp: 'image/webp', bmp: 'image/bmp', ppt: 'application/vnd.ms-powerpoint',
+  pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', txt: 'text/plain', csv: 'text/csv', rtf: 'application/rtf',
+  zip: 'application/zip', rar: 'application/vnd.rar', '7z': 'application/x-7z-compressed', mp4: 'video/mp4', mov: 'video/quicktime', mp3: 'audio/mpeg',
+  m4a: 'audio/mp4', wav: 'audio/wav', odt: 'application/vnd.oasis.opendocument.text', ods: 'application/vnd.oasis.opendocument.spreadsheet',
+  odp: 'application/vnd.oasis.opendocument.presentation', json: 'application/json' };
+
+function attMaxBytes_() { return Math.max(1, cfgNum_('MAX_ATTACH_MB')) * 1024 * 1024; }
+function attExt_(name) { var i = String(name).lastIndexOf('.'); return i < 0 ? '' : String(name).substring(i + 1).toLowerCase(); }
+function attCleanName_(name) {
+  var n = String(name || '').replace(/[\u0000-\u001F\u007F\u200B-\u200F\u202A-\u202E\u2066-\u2069]/g, '').replace(/[\\\/:*?"<>|]+/g, '_').replace(/^\.+/, '').trim();
+  if (n.length > 150) { var e = attExt_(n); n = n.substring(0, 150 - (e ? e.length + 1 : 0)) + (e ? '.' + e : ''); }
+  return n;
+}
+function attHost_(url) { return String(url).replace(/^https?:\/\//i, '').split(/[\/?#]/)[0].replace(/^www\./, ''); }
+
+/** อ่านรหัสไฟล์/โฟลเดอร์จากลิงก์ Google Drive/Docs ทุกรูปแบบที่พบบ่อย */
+function driveRef_(url) {
+  var u = String(url), m = u.match(/^https:\/\/docs\.google\.com\/(document|spreadsheets|presentation|forms|drawings)\/(?:u\/\d+\/)?d\/([\w-]{20,})/);
+  if (m) return { id: m[2], type: m[1] };
+  m = u.match(/^https:\/\/drive\.google\.com\/(?:drive\/(?:u\/\d+\/)?folders\/|folderview\?(?:[^#]*&)?id=)([\w-]{20,})/);
+  if (m) return { id: m[1], type: 'folder' };
+  m = u.match(/^https:\/\/drive\.google\.com\/(?:file\/(?:u\/\d+\/)?d\/|open\?(?:[^#]*&)?id=|uc\?(?:[^#]*&)?id=)([\w-]{20,})/);
+  if (m) return { id: m[1], type: 'file' };
+  return null;
+}
+/** ลิงก์สำหรับ "ดูออนไลน์โดยไม่ต้องดาวน์โหลด" (ฝังในหน้าต่างของระบบได้) — ว่าง = เปิดในแท็บใหม่เท่านั้น */
+function attPreview_(a) {
+  var r = a.Origin === 'upload' ? { id: str_(a.FileId), type: 'file' } : driveRef_(str_(a.Url));
+  if (!r || !r.id) return '';
+  if (r.type === 'file') return 'https://drive.google.com/file/d/' + r.id + '/preview';
+  if (r.type === 'folder') return 'https://drive.google.com/embeddedfolderview?id=' + r.id + '#list';
+  if (r.type === 'forms' || r.type === 'drawings') return '';
+  return 'https://docs.google.com/' + r.type + '/d/' + r.id + '/preview';
+}
+function attOut_(a) {
+  return { id: a.AttId, planId: a.PlanId, kind: a.Kind, title: a.Title, url: safeUrl_(a.Url), previewUrl: attPreview_(a), fileName: a.FileName || '',
+    mime: a.MimeType || '', size: num_(a.Size), origin: a.Origin, note: a.Note || '', createdAt: String(a.CreatedAt || ''), createdBy: a.CreatedBy || '' };
+}
+function attListFor_(planId) {
+  return readAll_('Attachments').filter(function (a) { return a.PlanId === planId && !bool_(a.IsDeleted); })
+    .sort(function (x, y) { return String(x.CreatedAt).localeCompare(String(y.CreatedAt)); }).map(attOut_);
+}
+function attList_(user, p) {
+  var pl = findBy_('Plans', 'PlanId', p.planId);
+  if (!pl) fail_('NOT_FOUND', 'ไม่พบแผนงาน');
+  return attListFor_(p.planId);
+}
+function attActiveCount_(planId) { return readAll_('Attachments').filter(function (a) { return a.PlanId === planId && !bool_(a.IsDeleted); }).length; }
+function attPlan_(user, planId) {
+  var pl = mustEditPlan_(user, planId), cap = Math.max(1, cfgNum_('MAX_ATTACH_PER_PLAN'));
+  if (attActiveCount_(planId) >= cap) fail_('LIMIT', 'แนบเอกสารได้สูงสุด ' + cap + ' รายการต่อแผน กรุณาลบรายการที่ไม่ใช้แล้วหรือรวมเป็นโฟลเดอร์ Drive เดียว');
+  return pl;
+}
+function attFolder_(pl) {
+  var root = appFolder_(), tag = String(pl.PlanId), it = root.searchFolders("title contains '" + tag + "'");
+  if (it.hasNext()) return it.next();
+  return root.createFolder((String(pl.Year) + ' ' + tag + ' ' + String(pl.Name).replace(/[\\\/:*?"<>|\r\n]+/g, ' ').substring(0, 50)).trim());
+}
+function attCleanUrl_(u) {
+  u = String(u == null ? '' : u).replace(/[\u0000-\u001F\u007F\s]+/g, '');
+  if (!u) fail_('VALIDATION', 'กรุณาวางลิงก์เอกสาร');
+  if (!/^https?:\/\//i.test(u)) { if (/^[\w-]+(\.[\w-]+)+(\/|$)/.test(u)) u = 'https://' + u; else fail_('VALIDATION', 'ลิงก์ต้องขึ้นต้นด้วย https://'); }
+  if (u.length > 2000) fail_('VALIDATION', 'ลิงก์ยาวเกินไป (สูงสุด 2,000 ตัวอักษร)');
+  if (!/^https?:\/\/[^\/?#]+\.[^\/?#]+/.test(u)) fail_('VALIDATION', 'ลิงก์ไม่ถูกต้อง');
+  return u;
+}
+/** ตรวจไฟล์ Drive ที่ระบบเข้าถึงได้: ชื่อ/ประเภท/ขนาด และเตือนถ้าไม่ได้แชร์แบบมีลิงก์ */
+function attLinkMeta_(url) {
+  var r = driveRef_(url), meta = { ref: r, name: '', mime: '', size: 0, warning: '' };
+  if (!r) return meta;
+  try {
+    var f = r.type === 'folder' ? DriveApp.getFolderById(r.id) : DriveApp.getFileById(r.id);
+    meta.name = f.getName();
+    if (r.type !== 'folder') { meta.mime = f.getMimeType(); meta.size = f.getSize(); }
+    var acc = f.getSharingAccess();
+    if (acc === DriveApp.Access.PRIVATE) meta.warning = 'ไฟล์นี้ยังเป็นส่วนตัว (ไม่ได้แชร์) ผู้ดูคนอื่นจะเปิดไม่ได้ — ตั้งค่าแชร์เป็น "ทุกคนที่มีลิงก์" หรือแชร์ให้ผู้เกี่ยวข้อง';
+    else if (acc === DriveApp.Access.DOMAIN || acc === DriveApp.Access.DOMAIN_WITH_LINK) meta.warning = 'ไฟล์นี้แชร์เฉพาะภายในโดเมนองค์กร ผู้ดูที่ใช้อีเมลนอกโดเมนอาจเปิดไม่ได้';
+  } catch (e) { meta.warning = 'ระบบตรวจสิทธิ์ของไฟล์นี้ไม่ได้ (เจ้าของไฟล์อาจเป็นบัญชีอื่น) — โปรดตรวจว่าผู้ดูมีสิทธิ์เข้าถึง'; }
+  return meta;
+}
+function attRecord_(user, pl, o, label) {
+  insert_('Attachments', o);
+  writeChanges_([chgRow_(user, 'Attachment', o.AttId, pl.PlanId, label, '', o.Title, '')]);
+  audit_(user.Email, label, 'Plan', pl.PlanId, o.Title + ' · ' + o.Origin);
+}
+
+function attAddLink_(user, p) {
+  var pl = attPlan_(user, p.planId), url = attCleanUrl_(p.url);
+  if (readAll_('Attachments').some(function (a) { return a.PlanId === pl.PlanId && !bool_(a.IsDeleted) && String(a.Url) === url; })) fail_('DUPLICATE', 'ลิงก์นี้ถูกแนบไว้ในแผนนี้แล้ว');
+  var meta = attLinkMeta_(url), isDrive = !!meta.ref;
+  var title = cleanText_(p.title, 120).substring(0, 120) || meta.name || attHost_(url);
+  var o = { AttId: newId_('A'), PlanId: pl.PlanId, Kind: 'link', Title: title, Url: url, FileId: isDrive ? meta.ref.id : '', FileName: meta.name, MimeType: meta.mime, Size: meta.size,
+    Origin: isDrive ? 'drive' : 'link', Note: cleanText_(p.note, 300).substring(0, 300), IsDeleted: false, CreatedAt: nowIso_(), CreatedBy: user.Email };
+  attRecord_(user, pl, o, 'แนบลิงก์เอกสาร');
+  return { att: attOut_(o), warning: meta.warning };
+}
+
+/** อัปโหลดไฟล์ (ไม่ล็อกสคริปต์ระหว่างสร้างไฟล์ใน Drive เพื่อไม่ให้ผู้ใช้อื่นต้องรอ) */
+function attUpload_(user, p) {
+  if (maintenanceOn_() && user.Role !== 'admin') fail_('MAINTENANCE', 'ระบบปิดปรับปรุงชั่วคราว — ดูข้อมูลได้ แต่บันทึกไม่ได้ กรุณาลองใหม่ภายหลัง');
+  var pl = attPlan_(user, p.planId);
+  var name = attCleanName_(p.name) || 'file', ext = attExt_(name);
+  if (ATT_BLOCKED_EXT_.indexOf(ext) >= 0) fail_('VALIDATION', 'ไม่อนุญาตไฟล์ประเภท .' + ext + ' (ไฟล์โปรแกรม/สคริปต์/มาโคร/เว็บ เสี่ยงต่อความปลอดภัย)');
+  var raw = String(p.data || ''); if (raw.indexOf(',') >= 0) raw = raw.split(',').pop();
+  if (!raw) fail_('VALIDATION', 'ไม่พบข้อมูลไฟล์');
+  var bytes = Utilities.base64Decode(raw);
+  if (!bytes.length) fail_('VALIDATION', 'ไฟล์ว่างเปล่า');
+  if (bytes.length > attMaxBytes_()) fail_('VALIDATION', 'ไฟล์ใหญ่เกิน ' + cfgNum_('MAX_ATTACH_MB') + ' MB — ไฟล์ขนาดใหญ่ให้อัปโหลดขึ้น Google Drive ก่อน แล้วแนบเป็นลิงก์');
+  var mime = UPLOAD_TYPES_[ext] || ATT_MIME_[ext] || 'application/octet-stream';
+  if (UPLOAD_TYPES_[ext] && !magicOk_(bytes, mime)) fail_('VALIDATION', 'เนื้อหาไฟล์ไม่ตรงกับนามสกุล หรือไฟล์เสียหาย: ' + name);
+  var file = attFolder_(pl).createFile(Utilities.newBlob(bytes, mime, name));
+  if (getSettings_().FileSharing === 'link') { try { file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); } catch (e) { /* นโยบายโดเมนอาจไม่อนุญาต */ } }
+  try {
+    return withLock_(function () {
+      invalidate_('Attachments');
+      var cap = Math.max(1, cfgNum_('MAX_ATTACH_PER_PLAN'));
+      if (attActiveCount_(pl.PlanId) >= cap) fail_('LIMIT', 'แนบเอกสารได้สูงสุด ' + cap + ' รายการต่อแผน');
+      var o = { AttId: newId_('A'), PlanId: pl.PlanId, Kind: 'file', Title: cleanText_(p.title, 120).substring(0, 120) || name, Url: file.getUrl(), FileId: file.getId(), FileName: name,
+        MimeType: mime, Size: bytes.length, Origin: 'upload', Note: cleanText_(p.note, 300).substring(0, 300), IsDeleted: false, CreatedAt: nowIso_(), CreatedBy: user.Email };
+      attRecord_(user, pl, o, 'อัปโหลดเอกสารแนบ');
+      return { att: attOut_(o), warning: getSettings_().FileSharing === 'link' ? '' : 'ตั้งค่าระบบเป็น "ไม่แชร์ไฟล์" ผู้ดูต้องได้รับสิทธิ์ใน Drive จึงจะเปิดได้' };
+    });
+  } catch (err) { try { file.setTrashed(true); } catch (e2) { /* ignore */ } throw err; }
+}
+
+function attUpdate_(user, p) {
+  var a = findBy_('Attachments', 'AttId', p.id);
+  if (!a || bool_(a.IsDeleted)) fail_('NOT_FOUND', 'ไม่พบเอกสารแนบ');
+  var pl = mustEditPlan_(user, a.PlanId), o = stripRow_(a);
+  if (p.title !== undefined) { o.Title = cleanText_(p.title, 120).substring(0, 120); if (!o.Title) fail_('VALIDATION', 'กรุณาระบุชื่อเอกสาร'); }
+  if (p.note !== undefined) o.Note = cleanText_(p.note, 300).substring(0, 300);
+  update_('Attachments', a._row, o);
+  audit_(user.Email, 'แก้ไขเอกสารแนบ', 'Plan', pl.PlanId, o.Title);
+  return { att: attOut_(o) };
+}
+function attDelete_(user, p) {
+  var a = findBy_('Attachments', 'AttId', p.id);
+  if (!a || bool_(a.IsDeleted)) fail_('NOT_FOUND', 'ไม่พบเอกสารแนบ');
+  var pl = mustEditPlan_(user, a.PlanId), o = stripRow_(a); o.IsDeleted = true;
+  update_('Attachments', a._row, o);
+  writeChanges_([chgRow_(user, 'Attachment', o.AttId, pl.PlanId, '(ลบเอกสารแนบ)', o.Title, '', '')]);
+  audit_(user.Email, 'ลบเอกสารแนบ', 'Plan', pl.PlanId, o.Title);
+  return { deleted: true };
+}
+
+// ---------------------------------------------------------------------------------
 // แดชบอร์ด / ค้างส่งสรุป / ส่งออกรายงาน
 // ---------------------------------------------------------------------------------
 function dashboard_(user, p) {
@@ -2446,6 +2602,11 @@ var ACTIONS_ = {
   'adj.save':         { role: 'user', write: true, fn: adjSave_ },
   'adj.delete':       { role: 'user', write: true, fn: adjDelete_ },
   'file.upload':      { role: 'user', write: true, fn: fileUpload_ },
+  'att.list':         { role: 'viewer', fn: attList_ },
+  'att.upload':       { role: 'user', fn: attUpload_ },          // ไม่ล็อกสคริปต์ระหว่างสร้างไฟล์ใน Drive (ล็อกเฉพาะตอนบันทึกชีต)
+  'att.addLink':      { role: 'user', write: true, fn: attAddLink_ },
+  'att.update':       { role: 'user', write: true, fn: attUpdate_ },
+  'att.delete':       { role: 'user', write: true, fn: attDelete_ },
   'fix.resolve':      { role: 'user', write: true, fn: fixResolve_ },
   'plans.bulk':       { role: 'user', write: true, fn: plansBulk_ },
   'plans.duplicate':  { role: 'user', write: true, fn: plansDuplicate_ },

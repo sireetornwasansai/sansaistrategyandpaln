@@ -1,0 +1,56 @@
+/* เอกสารแนบของแผนงาน/โครงการ (v2.8) — ใช้ร่วมกับ tokens ใน style.css */
+.att{display:block}
+.att-drop{display:flex;align-items:center;gap:14px;padding:16px 18px;border:2px dashed #b9c9e4;border-radius:14px;background:#f8faff;cursor:pointer;transition:border-color .15s,background .15s}
+.att-drop:hover,.att-drop.over{border-color:var(--brand);background:var(--brand-soft)}
+.att-drop:focus-visible{outline:3px solid rgba(29,79,145,.35);outline-offset:2px}
+.att-drop>i{font-size:1.8rem;color:var(--brand)}
+.att-drop b{display:block;font-weight:600}.att-drop small{display:block;color:var(--mut);font-size:.8rem;margin-top:2px}
+.att-link{display:grid;grid-template-columns:2fr 1.2fr auto;gap:8px;margin-top:10px}
+.att-link input{min-width:0}
+.att-hint{margin:8px 2px 0;font-size:.8rem;color:var(--mut)}
+.att-hint i{color:var(--brand)}
+.att-msg{margin-top:8px}.att-msg:empty{display:none}
+.att-note{display:flex;gap:8px;align-items:flex-start;padding:8px 12px;border-radius:10px;font-size:.85rem;margin-top:6px;line-height:1.5}
+.att-note.err{background:var(--red-soft);color:#9f1239}.att-note.warn{background:var(--amber-soft);color:var(--amber)}.att-note.ok{background:var(--green-soft);color:var(--green)}
+.att-note i{margin-top:3px}
+.att-list{list-style:none;margin:12px 0 0;padding:0;display:flex;flex-direction:column;gap:8px}
+.att-item{display:flex;align-items:flex-start;gap:12px;padding:10px 12px;border:1px solid var(--bd);border-radius:12px;background:#fff}
+.att-item.staged{background:#fbfcff;border-style:dashed}
+.att-ico{width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;background:#eef2fb;color:#4b5b7a;font-size:1.1rem}
+.att-ico.pdf{background:#fee2e2;color:#b91c1c}.att-ico.img{background:#e0f2fe;color:#0369a1}.att-ico.word{background:#dbeafe;color:#1d4ed8}
+.att-ico.excel{background:#dcfce7;color:#15803d}.att-ico.ppt{background:#ffedd5;color:#c2410c}.att-ico.zip{background:#fef3c7;color:#92400e}
+.att-ico.video{background:#ede9fe;color:#6d28d9}.att-ico.drive{background:#e0f2fe;color:#0e7490}.att-ico.link{background:var(--brand-soft);color:var(--brand)}
+.att-body{flex:1;min-width:0}
+.att-title{display:block;max-width:100%;padding:0;border:0;background:none;font:inherit;font-weight:600;color:var(--brand-ink,#12325f);text-align:left;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.att-title:hover{text-decoration:underline}.att-title.static{cursor:default;text-decoration:none}
+.att-meta{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:center;font-size:.78rem;color:var(--mut);margin-top:2px}
+.att-chip{padding:1px 8px;border-radius:999px;font-size:.72rem;font-weight:600;background:#eef2fb;color:#4b5b7a}
+.att-chip.upload{background:var(--green-soft);color:var(--green)}.att-chip.drive{background:#e0f2fe;color:#0e7490}.att-chip.link{background:var(--brand-soft);color:var(--brand)}
+.att-fn{max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.att-note-txt{font-size:.82rem;color:var(--ink);margin-top:4px}
+.att-warn{font-size:.78rem;color:var(--amber);margin-top:4px}
+.att-state{display:inline-flex;gap:5px;align-items:center}.att-state.ok{color:var(--green)}.att-state.err{color:var(--red)}.att-state.wait{color:var(--mut)}
+.att-act{display:flex;gap:2px;flex-shrink:0}
+.att-act .icon-btn.danger:hover{color:var(--red)}
+.att-empty{padding:14px;text-align:center;color:var(--mut);border:1px dashed var(--bd);border-radius:12px;font-size:.88rem}
+.att-card{margin:14px 0}
+.att-head{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 12px;margin-bottom:10px}
+.att-head h2{margin:0;font-size:1.05rem}
+.att-head .count{background:var(--brand-soft);color:var(--brand);border-radius:999px;padding:0 9px;font-size:.8rem;margin-left:4px}
+.spinner.sm{width:14px;height:14px;border-width:2px;display:inline-block;vertical-align:-2px}
+/* หน้าต่างดูออนไลน์ */
+.att-prev{border:0;padding:0;border-radius:16px;width:min(1100px,96vw);height:min(86vh,900px);box-shadow:0 30px 80px rgba(11,20,38,.45);background:var(--card,#fff);color:var(--ink)}
+.att-prev::backdrop{background:rgba(11,20,38,.6)}
+.att-prev-box{display:flex;flex-direction:column;height:100%}
+.att-prev-box header{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--bd)}
+.att-prev-box header b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.att-prev-box header span{display:flex;gap:8px;flex-shrink:0}
+.att-prev-frame{position:relative;flex:1;min-height:0;background:#f1f4fb}
+.att-prev-frame iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
+.att-prev-load{position:absolute;inset:0;display:flex;align-items:center;justify-content:center}
+.att-prev-box>p{margin:0;padding:8px 14px}
+@media(max-width:700px){
+  .att-link{grid-template-columns:1fr}
+  .att-drop{flex-direction:column;text-align:center}
+  .att-item{flex-wrap:wrap}.att-act{width:100%;justify-content:flex-end}
+  .att-prev{width:100vw;height:100dvh;border-radius:0;max-height:100dvh}
+}

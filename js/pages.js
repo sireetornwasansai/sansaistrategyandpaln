@@ -109,7 +109,7 @@
         a += x.calc.activeBudget; p += x.calc.netPaid; r += x.calc.remaining;
         const pl = x.plan;
         return '<tr class="click" data-href="#/plan/' + esc(pl.PlanId) + '">' + (App.can() ? '<td class="chk"><input type="checkbox" data-sel="' + esc(pl.PlanId) + '"' + (S.sel.has(pl.PlanId) ? ' checked' : '') + ' aria-label="เลือกแผน"></td>' : '') + '<td class="muted">' + esc(pl.Seq) + '</td><td><a href="#/plan/' + esc(pl.PlanId) + '" class="plan-link">' + esc(pl.Name) + '</a>' +
-          '<div class="muted small"><span class="tag">' + esc(App.fundName(pl.FundCode)) + '</span> ' + esc(pl.Owner) + (x.calc.noDateCount ? ' · <span class="warn-text">' + x.calc.noDateCount + ' กิจกรรมไม่มีวันที่</span>' : '') + '</div></td>' +
+          '<div class="muted small"><span class="tag">' + esc(App.fundName(pl.FundCode)) + '</span> ' + esc(pl.Owner) + (x.attCount ? ' · <span title="เอกสารแนบ"><i class="fas fa-paperclip"></i> ' + x.attCount + '</span>' : '') + (x.calc.noDateCount ? ' · <span class="warn-text">' + x.calc.noDateCount + ' กิจกรรมไม่มีวันที่</span>' : '') + '</div></td>' +
           '<td class="num">' + App.money(x.calc.activeBudget, 0) + (x.calc.released ? '<div class="muted small">ปลดล็อก ' + App.money(x.calc.released, 0) + '</div>' : '') + '</td><td class="num">' + App.money(x.calc.netPaid, 0) + '</td><td class="num">' + App.money(x.calc.remaining, 0) + '</td>' +
           '<td class="prog-cell">' + App.progress(x.calc.pct) + '<small>' + App.pct(x.calc.pct) + '</small></td><td>' + App.badge(pl.Status) + ' ' + App.badge(x.calc.execState) + (x.overdue.is ? ' <span class="badge red" title="' + esc(x.overdue.reason) + '">ค้างสรุป</span>' : '') + '</td></tr>';
       }).join('') || '<tr><td colspan="8" class="empty">ไม่พบแผนงานตามเงื่อนไข</td></tr>';
@@ -158,9 +158,11 @@
       (g.overdue.is ? '<div class="alert warn"><b>ค้างส่งสรุปโครงการ</b> ' + esc(g.overdue.reason) + '</div>' : '') +
       (edit ? readyCard(g) : '') +
       '<div class="cards kpis">' + kp('งบตามแผน', App.money(c.plannedBudget, 0), '', 'fa-layer-group') + kp('งบที่ใช้จริง', App.money(c.activeBudget, 0), '', 'fa-wallet') + kp('เบิกจ่ายสุทธิ', App.money(c.netPaid, 0), 'accent', 'fa-money-bill-wave') + kp('คงเหลือ', App.money(c.remaining, 0), '', 'fa-piggy-bank') + kp('ปลดล็อกได้', App.money(c.released, 0), c.released ? 'warn' : '', 'fa-unlock') + kp('ร้อยละ', App.pct(c.pct) + App.progress(c.pct), '', 'fa-chart-pie') + '</div>' +
+      '<div id="att-card"></div>' +
       '<div class="section-head"><h2>กิจกรรม (' + g.activities.length + ')</h2>' + (edit ? '<button class="btn primary" data-act="newAct"><i class="fas fa-plus"></i> เพิ่มกิจกรรม</button>' : '') + '</div>' +
       (g.activities.length ? g.activities.map(a => actCard(a, edit, g.activities.length <= 5)).join('') : '<div class="card empty">ยังไม่มีกิจกรรม' + (edit ? ' — กด "เพิ่มกิจกรรม" เพื่อเริ่มวางงบ' : '') + '</div>') +
       deletedPanel(g, edit) + planLevel(g, edit);
+    if (App.attach) App.attach.mountCard(view.querySelector('#att-card'), g, edit);
   };
 
   // ===================================================================== ตรวจความพร้อมของแผน (ฝั่งหน้าเว็บ)
@@ -244,7 +246,9 @@
       App.field({ name: 'StrategyHosp', label: 'ยุทธศาสตร์ รพ.สันทราย', type: 'select', options: App.activeOpts('hosp').map(o => ({ v: o.v, l: o.v + '. ' + o.l })), value: plan.StrategyHosp, full: true }) + '</div>' +
       '<div id="strat-region" class="full" hidden>' + App.field({ name: 'StrategyRegion', label: 'ยุทธศาสตร์ระดับเขต', value: plan.StrategyRegion || '', full: true }) + '</div>' +
       App.field({ name: 'Status', label: 'สถานะแผน', type: 'select', noBlank: true, options: App.masters().enums.planStatuses, value: plan.Status }) + App.field({ name: 'ReturnDate', label: 'วันที่ส่งคืนแผน (อนุมัติแล้ว)', type: 'date', value: plan.ReturnDate || '' }) +
-      App.field({ name: 'Note', label: 'หมายเหตุ', type: 'textarea', value: plan.Note || '', full: true }) + '</div>';
+      App.field({ name: 'Note', label: 'หมายเหตุ', type: 'textarea', value: plan.Note || '', full: true }) +
+      '<div class="field full"><label>เอกสารแนบโครงการ <small class="muted">(ไฟล์ทุกประเภท และ/หรือลิงก์ Google Drive)</small></label><div id="att-host"></div></div></div>';
+    let attCtl = null;
     App.modal({ title: isNew ? 'เพิ่มแผนงาน' : 'แก้ไขแผนงาน', html: html, wide: true,
       onOpen: d => {
         const mis = d.querySelector('[name=StrategyMission]'), prov = d.querySelector('[name=StrategyProv]'), fund = d.querySelector('[name=FundCode]'), owner = d.querySelector('[name=Owner]'), dep = d.querySelector('[name=Department]');
@@ -258,11 +262,18 @@
         const toggle = () => { const f = App.fund(fund.value), region = f && f.StrategySet === 'region'; d.querySelector('#strat-hospital').hidden = !!region; d.querySelector('#strat-region').hidden = !region; };
         fund.addEventListener('change', toggle); toggle();
         owner.addEventListener('change', () => { const pp = ppl.find(x => x.Name === owner.value); if (pp && pp.Department && !dep.value) dep.value = pp.Department; });
+        if (App.attach) attCtl = App.attach.mount(d.querySelector('#att-host'), { planId: isNew ? null : plan.PlanId, canEdit: true });
       },
       onSubmit: async d => {
         const v = App.values(d); if (!isNew) v.PlanId = plan.PlanId;
         const r = await App.apiReason('plans.save', { plan: v, expectedUpdatedAt: isNew ? undefined : plan.UpdatedAt });
-        App.toast('บันทึกแผนงานแล้ว', 'success');
+        let fl = null;
+        if (isNew && attCtl && attCtl.hasStaged()) {
+          const sb = d.querySelector('[data-submit]');
+          fl = await attCtl.flush(r.planId, (i, n) => { if (sb) sb.textContent = 'กำลังแนบเอกสาร ' + i + '/' + n + '…'; });
+        }
+        if (fl && fl.failed.length) App.toast('บันทึกแผนแล้ว แต่แนบเอกสารไม่สำเร็จ ' + fl.failed.length + ' รายการ (' + fl.failed[0].label + ': ' + fl.failed[0].error + ') — เพิ่มใหม่ได้ที่หน้าแผน', 'error');
+        else App.toast(fl && fl.done ? 'บันทึกแผนงานและแนบเอกสาร ' + fl.done + ' รายการแล้ว' : 'บันทึกแผนงานแล้ว', 'success');
         if (isNew) location.hash = '#/plan/' + r.planId; else reload();
       } });
   }

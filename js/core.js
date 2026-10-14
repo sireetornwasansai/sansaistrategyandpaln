@@ -58,7 +58,7 @@
     if (!cfg.API_URL || /YOUR_DEPLOYMENT_ID/.test(cfg.API_URL)) throw new Error('ยังไม่ได้ตั้งค่า API_URL ในไฟล์ config.js');
     busy(1);
     const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
-    const to = setTimeout(() => { if (ctrl) ctrl.abort(); }, 90000);
+    const to = setTimeout(() => { if (ctrl) ctrl.abort(); }, opts.timeout || 90000);
     try {
       const res = await fetch(cfg.API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, redirect: 'follow',
         body: JSON.stringify({ action: action, params: params || {}, token: App.state.token }), signal: ctrl ? ctrl.signal : undefined });
