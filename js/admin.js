@@ -5,9 +5,10 @@
   const pageHead = (t, s, a) => App.pageHead(t, s, a);
 
   // ===================================================================== ผู้ใช้งาน
-  const USER_TABS = [['pending', 'รออนุมัติ'], ['approved', 'อนุมัติแล้ว'], ['other', 'ปฏิเสธ/ระงับ'], ['all', 'ทั้งหมด']];
-  const ST_LABEL = { pending: 'รออนุมัติ', approved: 'อนุมัติแล้ว', rejected: 'ปฏิเสธ', suspended: 'ระงับ' };
-  const ST_CLASS = { pending: 'amber', approved: 'green', rejected: 'red', suspended: 'dark' };
+  const USER_TABS = [['pending', 'รออนุมัติ'], ['approved', 'อนุมัติแล้ว'], ['other', 'ปฏิเสธ/ระงับ/ยังไม่ส่งคำขอ'], ['all', 'ทั้งหมด']];
+  const isOther = u => u.Status === 'rejected' || u.Status === 'suspended' || u.Status === 'new';
+  const ST_LABEL = { new: 'ยังไม่ส่งคำขอ', pending: 'รออนุมัติ', approved: 'อนุมัติแล้ว', rejected: 'ปฏิเสธ', suspended: 'ระงับ' };
+  const ST_CLASS = { new: 'gray', pending: 'amber', approved: 'green', rejected: 'red', suspended: 'dark' };
   const ROLE_LABEL = { admin: 'แอดมิน', user: 'เจ้าหน้าที่ (แก้ไขได้)', viewer: 'ผู้ดูข้อมูล (อ่านอย่างเดียว)' };
 
   App.pages.users = async function (view) {
@@ -15,18 +16,19 @@
     const users = await App.api('users.list');
     S.users = users;
     const tab = S.userTab || (users.some(u => u.Status === 'pending') ? 'pending' : 'approved');
-    const rows = users.filter(u => tab === 'all' || (tab === 'other' ? (u.Status === 'rejected' || u.Status === 'suspended') : u.Status === tab))
+    const rows = users.filter(u => tab === 'all' || (tab === 'other' ? isOther(u) : u.Status === tab))
       .sort((a, b) => String(b.RequestedAt).localeCompare(String(a.RequestedAt)));
-    const count = k => users.filter(u => k === 'all' || (k === 'other' ? (u.Status === 'rejected' || u.Status === 'suspended') : u.Status === k)).length;
-    view.innerHTML = pageHead('ผู้ใช้งาน', 'ผู้ที่ล็อกอินด้วย Gmail ครั้งแรกจะอยู่สถานะ "รออนุมัติ" จนกว่าแอดมินจะอนุมัติ — สิทธิ์เปลี่ยนมีผลทันที', '') +
+    const count = k => users.filter(u => k === 'all' || (k === 'other' ? isOther(u) : u.Status === k)).length;
+    view.innerHTML = pageHead('ผู้ใช้งาน', 'ผู้ใช้ใหม่ล็อกอินด้วย Google แล้วกรอกแบบขออนุญาต (คำนำหน้า ชื่อ-สกุล หน่วยงาน กลุ่มงาน หน้าที่ต่อแผนงาน) จึงเข้าสู่สถานะ "รออนุมัติ" — สิทธิ์เปลี่ยนมีผลทันที', '') +
       '<div class="tabs">' + USER_TABS.map(t => '<button class="tab' + (t[0] === tab ? ' on' : '') + '" data-act="userTab" data-id="' + t[0] + '">' + t[1] + ' <span class="count">' + count(t[0]) + '</span></button>').join('') + '</div>' +
       '<div class="card table-card"><div class="table-wrap"><table class="table"><thead><tr><th>ผู้ใช้</th><th>กลุ่มงาน / ผู้รับผิดชอบ</th><th>บทบาท</th><th>สถานะ</th><th>เข้าล่าสุด</th><th></th></tr></thead><tbody>' +
       (rows.length ? rows.map(u => '<tr><td><div class="user-cell">' + (u.Picture ? '<img src="' + esc(u.Picture) + '" alt="" referrerpolicy="no-referrer">' : '<span class="avatar">' + esc((u.Name || u.Email).charAt(0)) + '</span>') + '<div><b>' + esc(u.Name) + '</b><div class="muted small">' + esc(u.Email) + '</div></div></div></td>' +
-        '<td>' + esc(u.Department || '-') + '<div class="muted small">' + esc(u.PersonName || '') + '</div></td><td>' + esc(ROLE_LABEL[u.Role] || u.Role) + '</td><td>' + App.badge(ST_LABEL[u.Status] || u.Status, ST_CLASS[u.Status]) + '<div class="muted small">' + (u.RequestedAt ? 'ขอเมื่อ ' + App.dateTime(u.RequestedAt) : '') + '</div></td><td class="muted small">' + (u.LastLoginAt ? App.dateTime(u.LastLoginAt) : '—') + '</td><td class="act-cell wrap">' + userButtons(u) + '</td></tr>').join('') :
+        '<td>' + esc(u.Department || '-') + (u.Organization ? '<div class="muted small">' + esc(u.Organization) + '</div>' : '') + (u.PlanRole ? '<div class="muted small"><i class="fas fa-user-tag"></i> ' + esc(u.PlanRole) + '</div>' : '') + '<div class="muted small">' + esc(u.PersonName || '') + '</div>' + (u.dupName ? '<div class="small" style="color:var(--amber)"><i class="fas fa-triangle-exclamation"></i> ชื่อซ้ำกับบัญชีอื่น</div>' : '') + (u.RequestNote ? '<div class="muted small" title="' + esc(u.RequestNote) + '">“' + esc(String(u.RequestNote).slice(0, 60)) + '”</div>' : '') + '</td><td>' + esc(ROLE_LABEL[u.Role] || u.Role) + '</td><td>' + App.badge(ST_LABEL[u.Status] || u.Status, ST_CLASS[u.Status]) + '<div class="muted small">' + (u.RequestedAt ? 'ขอเมื่อ ' + App.dateTime(u.RequestedAt) : '') + '</div></td><td class="muted small">' + (u.LastLoginAt ? App.dateTime(u.LastLoginAt) : '—') + '</td><td class="act-cell wrap">' + userButtons(u) + '</td></tr>').join('') :
         '<tr><td colspan="6" class="empty">ไม่มีรายการ</td></tr>') + '</tbody></table></div></div>';
   };
   function userButtons(u) {
     const id = ' data-id="' + esc(u.Email) + '"', self = u.Email.toLowerCase() === S.user.email.toLowerCase();
+    if (u.Status === 'new') return '<button class="btn sm ghost" data-act="editUser"' + id + '>แก้ไข</button><button class="icon-btn" title="ลบ" data-act="deleteUser"' + id + '><i class="fas fa-trash"></i></button>';
     if (u.Status === 'pending') return '<button class="btn sm primary" data-act="approveUser"' + id + '>อนุมัติ</button><button class="btn sm danger ghost" data-act="rejectUser"' + id + '>ปฏิเสธ</button>';
     let h = '<button class="btn sm ghost" data-act="editUser"' + id + '>แก้ไข</button>';
     if (u.Status === 'approved' && !self) h += '<button class="btn sm ghost" data-act="suspendUser"' + id + '>ระงับ</button>';
@@ -40,11 +42,14 @@
   function userForm(u, approving) {
     const depts = (App.masters().data.departments || []).filter(d => d.Active !== false);
     const ppl = (App.masters().data.people || []).filter(p => p.Active !== false);
-    const html = '<div class="form-grid">' + App.field({ name: 'name', label: 'ชื่อที่แสดง', value: u.Name, full: true }) +
-      App.field({ name: 'role', label: 'บทบาท', type: 'select', noBlank: true, options: [{ v: 'user', l: ROLE_LABEL.user }, { v: 'viewer', l: ROLE_LABEL.viewer }, { v: 'admin', l: ROLE_LABEL.admin }], value: u.Role, full: true }) +
-      App.field({ name: 'department', label: 'กลุ่มงาน', type: 'select', options: depts.map(d => d.Name), value: u.Department }) +
-      App.field({ name: 'personName', label: 'ผูกกับผู้รับผิดชอบ (ใช้กับสิทธิ์ "แก้ได้เฉพาะแผนตนเอง")', type: 'select', options: ppl.map(p => p.Name), value: u.PersonName }) +
-      App.field({ name: 'note', label: 'หมายเหตุ', value: u.Note || '', full: true }) + '</div>';
+    const sugRole = u.Role === 'admin' ? 'admin' : (approving && u.suggestRole) || u.Role, sugPerson = u.PersonName || u.matchPerson || '';
+    const info = u.FirstName ? '<div class="card" style="padding:10px 14px;margin-bottom:12px;background:var(--brand-soft)"><b>ข้อมูลที่ผู้ขอกรอก</b><div class="small">' + esc(u.Prefix + u.FirstName + ' ' + u.LastName) + ' · ' + esc(u.Organization || '-') + ' / ' + esc(u.Department || '-') + '</div><div class="small">หน้าที่: <b>' + esc(u.PlanRole || '-') + '</b>' + (u.suggestRole ? ' → แนะนำสิทธิ์: ' + esc(ROLE_LABEL[u.suggestRole]) : '') + '</div>' + (u.RequestNote ? '<div class="small muted">หมายเหตุ: ' + esc(u.RequestNote) + '</div>' : '') + (u.matchPerson && !u.PersonName ? '<div class="small">พบชื่อตรงกับทะเบียนผู้รับผิดชอบ: <b>' + esc(u.matchPerson) + '</b> (เลือกให้อัตโนมัติ)</div>' : '') + (u.dupName ? '<div class="small" style="color:var(--amber)"><i class="fas fa-triangle-exclamation"></i> มีบัญชีอื่นใช้ชื่อเดียวกัน ตรวจสอบก่อนอนุมัติ</div>' : '') + '</div>' : '';
+    const deptOpts = depts.map(d => d.Name).filter((n, i, a) => a.indexOf(n) === i); if (u.Department && deptOpts.indexOf(u.Department) < 0) deptOpts.unshift(u.Department);
+    const html = info + '<div class="form-grid">' + App.field({ name: 'name', label: 'ชื่อที่แสดง', value: u.Name, full: true }) +
+      App.field({ name: 'role', label: 'บทบาท', type: 'select', noBlank: true, options: [{ v: 'user', l: ROLE_LABEL.user }, { v: 'viewer', l: ROLE_LABEL.viewer }, { v: 'admin', l: ROLE_LABEL.admin }], value: sugRole, full: true }) +
+      App.field({ name: 'department', label: 'กลุ่มงาน', type: 'select', options: deptOpts, value: u.Department }) +
+      App.field({ name: 'personName', label: 'ผูกกับผู้รับผิดชอบ (ใช้กับสิทธิ์ "แก้ได้เฉพาะแผนตนเอง")', type: 'select', options: ppl.map(p => p.Name), value: sugPerson }) +
+      App.field({ name: 'note', label: 'หมายเหตุ', value: (approving && u.Status === 'rejected') ? '' : (u.Note || ''), full: true }) + '</div>';
     App.modal({ title: (approving ? 'อนุมัติ: ' : 'แก้ไข: ') + u.Email, html: html, onSubmit: async d => {
       const v = App.values(d); const p = { email: u.Email, name: v.name, role: v.role, department: v.department, personName: v.personName, note: v.note };
       if (approving) p.status = 'approved';
@@ -53,7 +58,9 @@
   App.actions.approveUser = el => userForm(userOf(el.dataset.id), true);
   App.actions.editUser = el => userForm(userOf(el.dataset.id), false);
   const setStatus = async (email, status, msg) => { await App.api('users.update', { email: email, status: status }); App.toast(msg, 'success'); await refreshBadge(); App.render(); };
-  App.actions.rejectUser = async el => { if (await App.confirm('ปฏิเสธคำขอของ ' + el.dataset.id + ' ?', 'ปฏิเสธ', true)) await setStatus(el.dataset.id, 'rejected', 'ปฏิเสธแล้ว'); };
+  App.actions.rejectUser = el => { const email = el.dataset.id;
+    App.modal({ title: 'ปฏิเสธคำขอ: ' + email, html: '<p class="muted">ผู้ขอจะเห็นเหตุผลนี้ในหน้าสถานะและในอีเมล และแก้ไขข้อมูลเพื่อยื่นคำขอใหม่ได้</p><div class="form-grid">' + App.field({ name: 'note', label: 'เหตุผลที่ไม่อนุมัติ', type: 'textarea', full: true, required: true, value: '' }) + '</div>',
+      onSubmit: async d => { const v = App.values(d); if (String(v.note || '').trim().length < 3) throw new Error('กรุณาระบุเหตุผลที่ไม่อนุมัติ'); await App.api('users.update', { email: email, status: 'rejected', note: String(v.note).trim() }); App.toast('ปฏิเสธแล้ว (ส่งอีเมลแจ้งผู้ขอ)', 'success'); await refreshBadge(); App.render(); } }); };
   App.actions.suspendUser = async el => { if (await App.confirm('ระงับการใช้งานของ ' + el.dataset.id + ' ? (ใช้งานต่อไม่ได้ทันที)', 'ระงับ', true)) await setStatus(el.dataset.id, 'suspended', 'ระงับแล้ว'); };
   App.actions.deleteUser = async el => { if (await App.confirm('ลบผู้ใช้ ' + el.dataset.id + ' ออกจากระบบ ?', 'ลบ', true)) { await App.api('users.delete', { email: el.dataset.id }); App.toast('ลบแล้ว', 'success'); await refreshBadge(); App.render(); } };
 

@@ -1,0 +1,92 @@
+/* ขออนุญาตเข้าใช้งาน (v2.7) — ใช้ร่วมกับ tokens ใน style.css */
+#access-screen{position:fixed;inset:0;z-index:10001;overflow-y:auto;padding:22px 16px 30px;background:var(--grad-hero)}
+#access-screen[hidden]{display:none}
+.ac-wrap{max-width:760px;margin:0 auto}
+.ac-brand{display:flex;align-items:center;gap:12px;color:#fff;margin:4px 4px 16px}
+.ac-brand img{width:44px;height:44px;object-fit:contain;background:#fff;border-radius:12px;padding:5px}
+.ac-brand b{display:block;font-size:1.05rem;letter-spacing:.3px}.ac-brand small{opacity:.85}
+.ac-card{background:#fff;border-radius:22px;padding:28px 30px;box-shadow:0 30px 80px rgba(17,22,65,.35)}
+.ac-card h2{margin:6px 0 6px;font-size:1.45rem;color:var(--brand-ink)}
+.ac-card .muted{margin:0 0 16px}
+.ac-foot{text-align:center;color:#dbe8ff;font-size:.82rem;margin:16px 0 0}
+.ac-foot a{color:#fff;text-decoration:underline;margin:0 8px}
+
+/* บัญชีผู้ใช้ */
+.ac-user{display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid var(--bd);border-radius:14px;background:#f8faff;margin-bottom:18px}
+.ac-user img,.ac-user .av{width:40px;height:40px;border-radius:50%;flex-shrink:0;object-fit:cover}
+.ac-user .av{display:flex;align-items:center;justify-content:center;background:var(--grad);color:#fff;font-weight:700}
+.ac-user>div{flex:1;min-width:0}.ac-user b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ac-user small{color:var(--mut);display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ตัวบอกขั้นตอน */
+.ac-steps{list-style:none;display:flex;gap:8px;margin:0 0 18px;padding:0}
+.ac-steps li{flex:1;display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:12px;background:#f1f4fb;color:var(--mut);font-size:.82rem;min-width:0}
+.ac-steps li span{width:24px;height:24px;border-radius:50%;background:#d7deee;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.78rem;flex-shrink:0}
+.ac-steps li b{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ac-steps li.on{background:var(--brand-soft);color:var(--brand-ink)}.ac-steps li.on span{background:var(--brand)}
+.ac-steps li.done{background:var(--green-soft);color:var(--green)}.ac-steps li.done span{background:var(--green)}
+
+/* ฟอร์ม */
+.ac-card fieldset{border:0;padding:0;margin:0 0 18px;min-width:0}
+.ac-card legend{font-weight:700;color:var(--brand-ink);padding:0;margin-bottom:10px;font-size:.95rem}
+.ac-grid{display:grid;grid-template-columns:150px 1fr 1fr;gap:14px}
+.ac-grid.two{grid-template-columns:1fr 1fr}
+.ac-card .field small{display:block;margin-top:4px}
+.ac-card [aria-invalid="true"]{border-color:var(--red);background:#fff8f9}
+.ac-err{color:var(--red);font-size:.8rem;margin-top:5px;display:flex;gap:6px;align-items:flex-start}
+.ac-err[hidden]{display:none}
+
+/* หน้าที่ต่อแผนงาน */
+.ac-roles{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.ac-role{position:relative;display:flex;gap:12px;align-items:flex-start;padding:12px 14px;border:1.5px solid var(--bd);border-radius:14px;cursor:pointer;background:#fff;transition:border-color .15s,background .15s,box-shadow .15s}
+.ac-role:hover{border-color:#9db8dd}
+.ac-role input{position:absolute;opacity:0;width:1px;height:1px;min-height:0;padding:0}
+.ac-role:focus-within{box-shadow:0 0 0 3px rgba(29,79,145,.25)}
+.ac-role .ico{width:38px;height:38px;border-radius:11px;background:var(--brand-soft);color:var(--brand);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.ac-role b{display:block;font-size:.93rem}.ac-role small{display:block;color:var(--mut);font-size:.78rem;line-height:1.45;margin-top:2px}
+.ac-role.on{border-color:var(--brand);background:var(--brand-soft)}.ac-role.on .ico{background:var(--grad);color:#fff}
+.ac-hint{margin:10px 0 0;font-size:.82rem;color:var(--mut);background:#f6f8fd;border-radius:10px;padding:8px 12px}
+
+/* กล่องแจ้ง */
+.ac-note{display:flex;gap:10px;padding:12px 14px;border-radius:12px;margin:0 0 16px;font-size:.88rem;line-height:1.6}
+.ac-note i{margin-top:3px}
+.ac-note.warn{background:var(--amber-soft);color:var(--amber)}.ac-note.err{background:var(--red-soft);color:#9f1239}.ac-note.info{background:var(--brand-soft);color:var(--brand-ink)}
+.ac-note[hidden]{display:none}
+
+/* สรุป + ยินยอม */
+.ac-sum{width:100%;border-collapse:collapse;margin:0 0 16px;font-size:.92rem}
+.ac-sum th,.ac-sum td{padding:9px 12px;border-bottom:1px solid var(--bd);text-align:left;vertical-align:top}
+.ac-sum th{width:38%;color:var(--mut);font-weight:600;background:#f8faff}
+.ac-consent{display:flex;gap:12px;align-items:flex-start;padding:14px;border:1.5px solid var(--bd);border-radius:14px;background:#fbfcff;cursor:pointer;font-size:.88rem;line-height:1.65}
+.ac-consent input{width:20px;height:20px;min-height:0;padding:0;margin-top:3px;flex-shrink:0;accent-color:var(--brand)}
+.ac-consent-links{font-size:.82rem;margin:8px 2px 0}
+.ac-next{margin:16px 0;padding:12px 16px;border-radius:14px;background:#f6f8fd;font-size:.86rem;color:var(--mut)}
+.ac-next b{color:var(--brand-ink)}.ac-next ol{margin:6px 0 0;padding-left:20px}
+.ac-actions{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:20px;flex-wrap:wrap}
+.ac-actions.center{justify-content:center}
+
+/* สถานะ */
+.ac-status{text-align:center;padding:18px 10px 10px;border-radius:16px;margin-bottom:16px}
+.ac-status .big{width:64px;height:64px;border-radius:50%;margin:0 auto 10px;display:flex;align-items:center;justify-content:center;font-size:1.7rem}
+.ac-status h2{margin:0 0 4px}.ac-status p{margin:0;color:var(--mut)}
+.ac-status.amber .big{background:var(--amber-soft);color:var(--amber)}.ac-status.red .big{background:var(--red-soft);color:var(--red)}.ac-status.dark .big{background:#e5e7eb;color:#374151}
+.ac-tl{list-style:none;margin:0 0 18px;padding:0 0 0 6px}
+.ac-tl li{position:relative;padding:0 0 14px 38px;color:var(--mut);min-height:34px}
+.ac-tl li::before{content:"";position:absolute;left:13px;top:28px;bottom:0;width:2px;background:var(--bd)}
+.ac-tl li:last-child::before{display:none}
+.ac-tl li i{position:absolute;left:0;top:0;width:28px;height:28px;border-radius:50%;background:#e8edf7;display:flex;align-items:center;justify-content:center;font-size:.75rem}
+.ac-tl li b{display:block;color:var(--ink)}.ac-tl li small{display:block}
+.ac-tl li.done i{background:var(--green);color:#fff}.ac-tl li.on i{background:var(--amber-soft);color:var(--amber);box-shadow:0 0 0 4px rgba(250,204,21,.25)}
+
+@media(max-width:700px){
+  .ac-card{padding:22px 18px;border-radius:18px}
+  .ac-grid,.ac-grid.two,.ac-roles{grid-template-columns:1fr}
+  .ac-steps li b{display:none}.ac-steps li.on b{display:block}
+  .ac-sum th{width:42%}
+  .ac-actions .btn{flex:1}
+}
+@media(prefers-reduced-motion:reduce){.ac-role{transition:none}}
+
+/* ลิงก์นโยบาย บนหน้า login */
+.login-legal{margin:10px 0 0;font-size:.8rem;color:var(--mut);text-align:center}
+.login-legal a{color:var(--brand);text-decoration:underline;margin:0 6px}

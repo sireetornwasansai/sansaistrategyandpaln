@@ -126,7 +126,7 @@
     (function () { let b = document.getElementById('maint-banner'); if (!b) { b = document.createElement('div'); b.id = 'maint-banner'; b.setAttribute('role', 'status'); b.textContent = 'ระบบอยู่ระหว่างปิดปรับปรุงชั่วคราว — ดูข้อมูลได้ แต่ยังบันทึกการแก้ไขไม่ได้ (เฉพาะแอดมินบันทึกได้)'; document.body.appendChild(b); } b.hidden = !me.maintenance; })(); S.pendingUsers = me.pendingUsers || 0;
     S.year = S.year || masters.settings.CurrentYear;
     App.saveSession();
-    $('#login-screen').hidden = true; $('#app').hidden = false;
+    $('#login-screen').hidden = true; const acs = $('#access-screen'); if (acs) acs.hidden = true; $('#app').hidden = false;
     buildNav();
     if (!location.hash || location.hash === '#') location.hash = '#/dashboard'; else App.render();
   };
@@ -135,6 +135,7 @@
   let gisReady = false;
   function loginMsg(html, cls) { const el = $('#login-msg'); el.className = 'login-msg ' + (cls || ''); el.innerHTML = html; el.hidden = !html; }
   App.showLogin = function (msg) {
+    const ac = $('#access-screen'); if (ac) ac.hidden = true;
     $('#app').hidden = true; $('#login-screen').hidden = false; $('#login-spin').hidden = true; $('#g-btn').hidden = false;
     loginMsg(msg ? esc(msg) : '', msg ? 'warn' : '');
     initGoogle();
@@ -152,19 +153,17 @@
       } else if (++tries > 60) { clearInterval(t); loginMsg('โหลดระบบ Google Sign-In ไม่สำเร็จ — ตรวจสอบอินเทอร์เน็ตหรือการบล็อกสคริปต์ แล้วรีเฟรชหน้า', 'err'); }
     }, 200);
   }
+  App.completeLogin = async function (r) { S.token = r.token; S.expiresAt = r.expiresAt; S.user = r.user; App.saveSession(); await App.start(); };
   async function onCredential(resp) {
     $('#g-btn').hidden = true; $('#login-spin').hidden = false; loginMsg('');
     try {
       const r = await App.api('loginGoogle', { idToken: resp.credential }, { noLogout: true });
       if (r.status === 'approved') {
-        S.token = r.token; S.expiresAt = r.expiresAt; S.user = r.user; App.saveSession();
-        await App.start();
+        await App.completeLogin(r);
       } else {
-        $('#login-spin').hidden = true;
-        const icon = r.status === 'pending' ? '<i class="fas fa-hourglass-half"></i>' : '<i class="fas fa-ban"></i>';
-        loginMsg('<div class="status-box ' + esc(r.status) + '"><div class="big">' + icon + '</div><b>' + esc(r.message) + '</b><div class="muted small">บัญชี: ' + esc(r.email) + '</div>' +
-          (r.status === 'pending' ? '<p class="small">ผู้ดูแลระบบได้รับแจ้งแล้ว เมื่ออนุมัติแล้วให้เข้าสู่ระบบอีกครั้ง</p>' : '') + '<button class="btn" id="btn-other">ใช้บัญชี Google อื่น</button></div>', '');
-        $('#btn-other').addEventListener('click', () => { try { google.accounts.id.disableAutoSelect(); } catch (e) { /* ignore */ } App.showLogin(''); });
+        // ยังไม่ได้รับอนุมัติ: new = กรอกแบบขออนุญาต · pending/rejected/suspended = หน้าสถานะ (ดู js/access.js)
+        $('#login-spin').hidden = true; $('#g-btn').hidden = false;
+        await App.access.show(r, resp.credential);
       }
     } catch (e) { $('#login-spin').hidden = true; $('#g-btn').hidden = false; loginMsg(esc(e.message), 'err'); }
   }

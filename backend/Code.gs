@@ -33,7 +33,7 @@
  * =====================================================================================
  */
 
-var APP_VERSION = '2.6.0';
+var APP_VERSION = '2.7.0';
 var TZ_ = (function () { try { return PropertiesService.getScriptProperties().getProperty('TIMEZONE') || 'Asia/Bangkok'; } catch (e) { return 'Asia/Bangkok'; } })();
 /** ค่าตั้งต้นของ Script Properties ที่ปรับได้ (ไม่ตั้ง = ใช้ค่านี้) — setupSheet() จะเขียนค่าเหล่านี้ลง Script Properties ให้เห็นและแก้ได้ */
 var PROP_DEFAULTS_ = { TIMEZONE: 'Asia/Bangkok', ORG_NAME: 'โรงพยาบาลสันทราย จังหวัดเชียงใหม่', SESSION_HOURS: '12', MAX_UPLOAD_MB: '10',
@@ -44,7 +44,8 @@ var PROP_DEFAULTS_ = { TIMEZONE: 'Asia/Bangkok', ORG_NAME: 'โรงพยา�
 // ---------------------------------------------------------------------------------
 var SCHEMA_ = {
   Settings:       ['Key', 'Value', 'Description'],
-  Users:          ['Email', 'Name', 'Role', 'Status', 'Department', 'PersonName', 'Picture', 'RequestedAt', 'ApprovedBy', 'ApprovedAt', 'LastLoginAt', 'Note'],
+  Users:          ['Email', 'Name', 'Role', 'Status', 'Department', 'PersonName', 'Picture', 'RequestedAt', 'ApprovedBy', 'ApprovedAt', 'LastLoginAt', 'Note',
+                  'Prefix', 'FirstName', 'LastName', 'Organization', 'PlanRole', 'RequestNote', 'ConsentAt'],
   Funds:          ['Code', 'Name', 'StrategySet', 'InHospitalKpi', 'SortOrder', 'Active'],
   Categories:     ['Code', 'Name', 'SortOrder', 'Active'],
   PlanTypes:      ['Code', 'Name', 'SortOrder', 'Active'],
@@ -80,7 +81,7 @@ var TIME_COLS_ = ['Time', 'CreatedAt', 'UpdatedAt', 'RequestedAt', 'ApprovedAt',
 var MONEY_COLS_ = ['Amount'];
 
 var ROLES_ = ['viewer', 'user', 'admin'];
-var USER_STATUSES_ = ['pending', 'approved', 'rejected', 'suspended'];
+var USER_STATUSES_ = ['new', 'pending', 'approved', 'rejected', 'suspended']; // new = ล็อกอิน Google แล้วแต่ยังไม่ส่งแบบขออนุญาต
 var PLAN_STATUSES_ = ['ร่าง', 'อนุมัติ', 'ดำเนินการ', 'ส่งสรุปแล้ว', 'ปิด', 'ยกเลิก'];
 var ACT_STATUSES_ = ['ปกติ', 'ไม่ใช้งบประมาณ', 'ไม่เบิก', 'ยกเลิก', 'เลื่อน'];
 var ACT_EXCLUDED_ = ['ยกเลิก', 'ไม่เบิก', 'ไม่ใช้งบประมาณ']; // ไม่นับเป็นงบที่ต้องใช้จริง
@@ -562,9 +563,22 @@ function sheet_(name) {
     CACHE_[mk] = true;
     var need = SCHEMA_[name].length;
     if (sh.getMaxColumns() < need) sh.insertColumnsAfter(sh.getMaxColumns(), need - sh.getMaxColumns());
-    if (sh.getLastColumn() < need || String(sh.getRange(1, need).getValue()).trim() === '') sh.getRange(1, need).setValue(SCHEMA_[name][need - 1]);
+    if (name === 'Users') migrateLegacyUsers_(sh);
+    var hdr = sh.getRange(1, 1, 1, need).getValues()[0]; // v2.7: เติมหัวตารางทุกคอลัมน์ที่ว่าง (เพิ่มได้ทีละหลายคอลัมน์)
+    for (var hi = 0; hi < need; hi++) if (String(hdr[hi]).trim() === '') sh.getRange(1, hi + 1).setValue(SCHEMA_[name][hi]);
   }
   return sh;
+}
+/** v2.7: ชีต Users รุ่นเก่ามีคอลัมน์ "Label" คั่นที่ D (Email,Name,Role,Label,status,Department,...) ทำให้สถานะ/กลุ่มงานเลื่อนผิดช่อง
+ *  ตรวจพบแล้วลบคอลัมน์ Label และเว้นช่อง PersonName ให้ตรง SCHEMA_ (ทำครั้งเดียว ปลอดภัยถ้าเรียกซ้ำ) */
+function migrateLegacyUsers_(sh) {
+  if (sh.getLastRow() < 1 || sh.getLastColumn() < 5) return;
+  var h = sh.getRange(1, 1, 1, 6).getValues()[0].map(function (x) { return String(x).trim().toLowerCase(); });
+  if (h[3] !== 'label' || h[4] !== 'status') return;
+  sh.deleteColumn(4);
+  sh.insertColumnAfter(5);
+  var cols = SCHEMA_.Users;
+  sh.getRange(1, 1, 1, cols.length).setValues([cols]);
 }
 function invalidate_(name) {
   if (name) { delete CACHE_['t_' + name]; if (name === 'Settings') delete CACHE_.settings; }
@@ -710,7 +724,8 @@ function userRow_(email) {
   return null;
 }
 function publicUser_(u) {
-  return { email: u.Email, name: u.Name, role: u.Role, status: u.Status, department: u.Department || '', personName: u.PersonName || '', picture: u.Picture || '' };
+  return { email: u.Email, name: u.Name, role: u.Role, status: u.Status, department: u.Department || '', personName: u.PersonName || '', picture: u.Picture || '',
+    prefix: u.Prefix || '', firstName: u.FirstName || '', lastName: u.LastName || '', organization: u.Organization || '', planRole: u.PlanRole || '' };
 }
 function linkPersonName_(email) {
   var e = String(email).toLowerCase(), ppl = readAll_('People');
@@ -728,29 +743,121 @@ function notifyAdminsNewUser_(u) {
       .map(function (r) { return r.Email; }).join(',');
   }
   sendMailSafe_(to, 'มีผู้ขอสิทธิ์เข้าใช้งานระบบแผนงานโครงการ ' + orgName_(),
-    'ผู้ใช้ ' + (u.Name || '-') + ' <' + u.Email + '> ขอสิทธิ์เข้าใช้งานระบบ\nกรุณาเข้าสู่ระบบ > เมนู "ผู้ใช้งาน" เพื่ออนุมัติหรือปฏิเสธ' + appLink_());
+    'ผู้ขอ: ' + (u.Name || '-') + ' <' + u.Email + '>\nหน่วยงาน: ' + (u.Organization || '-') + '\nกลุ่มงาน: ' + (u.Department || '-') +
+    '\nหน้าที่ต่อแผนงาน/โครงการ: ' + (u.PlanRole || '-') + (u.RequestNote ? '\nหมายเหตุ: ' + u.RequestNote : '') +
+    '\n\nกรุณาเข้าสู่ระบบ > เมนู "ผู้ใช้งาน" เพื่ออนุมัติหรือปฏิเสธ' + appLink_());
 }
 
-/** ล็อกอินด้วย Google: คืน status = approved | pending | rejected | suspended */
+// ---------------------------------------------------------------------------------
+// ขออนุญาตเข้าใช้งาน (v2.7): ล็อกอิน Google -> กรอกแบบขออนุญาต -> รอแอดมินอนุมัติ
+//   access.options / access.request เรียกก่อนมีสิทธิ์ (ไม่มี session) จึงตรวจ Google ID token ทุกครั้ง
+//   และตรวจ/ทำความสะอาดข้อมูลที่ฝั่งเซิร์ฟเวอร์ทั้งหมด (ไม่เชื่อข้อมูลจากหน้าเว็บ)
+// ---------------------------------------------------------------------------------
+var PREFIXES_ = ['นาย', 'นาง', 'นางสาว', 'นพ.', 'พญ.', 'ทพ.', 'ทพญ.', 'ภก.', 'ภญ.', 'พว.', 'ดร.'];
+var PLAN_ROLES_ = [
+  { value: 'ผู้รับผิดชอบหลัก', desc: 'เจ้าของแผนงาน/โครงการ รับผิดชอบการดำเนินงานและรายงานผลโดยตรง', suggest: 'user' },
+  { value: 'ผู้รับผิดชอบร่วม', desc: 'ร่วมดำเนินงานและบันทึกข้อมูลในแผนงาน/โครงการที่ร่วมรับผิดชอบ', suggest: 'user' },
+  { value: 'ผู้ประสานงาน', desc: 'ประสานงานระหว่างหน่วยงาน ติดตามความคืบหน้า และจัดเตรียมเอกสาร', suggest: 'user' },
+  { value: 'หัวหน้าหน่วยงาน', desc: 'กำกับดูแล ติดตามและให้ความเห็นต่อภาพรวมแผนงาน/โครงการของหน่วยงาน', suggest: 'viewer' }
+];
+// อักษรไทย (พยัญชนะ สระ วรรณยุกต์ — ไม่รวมเลขไทย) / อังกฤษ เว้นวรรค จุด ' -
+var NAME_RE_ = /^[\u0E01-\u0E3A\u0E40-\u0E4Ea-zA-Z][\u0E01-\u0E3A\u0E40-\u0E4Ea-zA-Z .'\-]*$/;
+var CONSENT_TEXT_ = 'ข้าพเจ้ายืนยันว่าข้อมูลข้างต้นเป็นความจริง และยินยอมให้เก็บรวบรวม ใช้ข้อมูลนี้เพื่อยืนยันตัวตนและกำหนดสิทธิ์การเข้าใช้งานระบบ ตามนโยบายคุ้มครองข้อมูลส่วนบุคคลของหน่วยงาน';
+
+function cleanText_(v, max) { return str_(v).replace(/[\u0000-\u001F\u007F]/g, ' ').replace(/\s+/g, ' ').trim().substring(0, max + 1); }
+function fullName_(prefix, first, last) { return prefix + first + ' ' + last; }
+function normName_(s) { return String(s || '').replace(/^(นางสาว|นาย|นาง|น\.ส\.|นพ\.|พญ\.|ทพญ\.|ทพ\.|ภก\.|ภญ\.|พว\.|ดร\.)/, '').replace(/\s+/g, '').toLowerCase(); }
+
+/** ตรวจ/ทำความสะอาดข้อมูลแบบขออนุญาต — ผิดเมื่อไรคืนข้อความที่ผู้ใช้อ่านเข้าใจ */
+function profileClean_(p) {
+  var prefix = str_(p.prefix);
+  if (PREFIXES_.indexOf(prefix) < 0) fail_('VALIDATION', 'กรุณาเลือกคำนำหน้า');
+  var first = cleanText_(p.firstName, 60), last = cleanText_(p.lastName, 60);
+  [['ชื่อ', first], ['นามสกุล', last]].forEach(function (x) {
+    if (!x[1]) fail_('VALIDATION', 'กรุณากรอก' + x[0]);
+    if (x[1].length > 60) fail_('VALIDATION', x[0] + 'ยาวเกิน 60 ตัวอักษร');
+    if (!NAME_RE_.test(x[1])) fail_('VALIDATION', x[0] + 'ใช้ได้เฉพาะตัวอักษรไทย/อังกฤษ (ห้ามมีตัวเลขหรือสัญลักษณ์พิเศษ)');
+  });
+  var org = cleanText_(p.organization, 120), dept = cleanText_(p.department, 120);
+  if (org.length < 2) fail_('VALIDATION', 'กรุณากรอกหน่วยงาน');
+  if (org.length > 120) fail_('VALIDATION', 'หน่วยงานยาวเกิน 120 ตัวอักษร');
+  if (dept.length < 2) fail_('VALIDATION', 'กรุณากรอกกลุ่มงาน');
+  if (dept.length > 120) fail_('VALIDATION', 'กลุ่มงานยาวเกิน 120 ตัวอักษร');
+  var role = str_(p.planRole);
+  if (!PLAN_ROLES_.some(function (r) { return r.value === role; })) fail_('VALIDATION', 'กรุณาเลือกหน้าที่ต่อแผนงานและโครงการ');
+  var note = cleanText_(p.note, 300);
+  if (note.length > 300) fail_('VALIDATION', 'หมายเหตุยาวเกิน 300 ตัวอักษร');
+  if (p.consent !== true && String(p.consent) !== 'true') fail_('VALIDATION', 'กรุณายืนยันและยินยอมการเก็บข้อมูลก่อนส่งคำขอ');
+  return { prefix: prefix, first: first, last: last, org: org, dept: dept, role: role, note: note };
+}
+function profileOut_(u) {
+  return { prefix: u.Prefix || '', firstName: u.FirstName || '', lastName: u.LastName || '', organization: u.Organization || '',
+    department: u.Department || '', planRole: u.PlanRole || '', note: u.RequestNote || '', requestedAt: String(u.RequestedAt || '') };
+}
+function checkDomain_(email, isBootAdmin) {
+  var allowed = prop_('ALLOWED_EMAIL_DOMAINS', '').toLowerCase().split(',').map(function (s) { return s.trim(); }).filter(String);
+  if (!isBootAdmin && allowed.length && allowed.indexOf(email.split('@')[1] || '') < 0)
+    fail_('AUTH', 'อีเมลนี้ไม่อยู่ในโดเมนที่ระบบอนุญาต (' + allowed.join(', ') + ') กรุณาใช้อีเมลหน่วยงาน');
+}
+
+/** access.options: ตัวเลือกของแบบฟอร์ม (ไม่ต้องล็อกอิน — ไม่คืนข้อมูลส่วนบุคคลของผู้ใช้ใดเลย) */
+function accessOptions_() {
+  var orgs = [orgName_()];
+  prop_('ORG_OPTIONS', '').split(',').forEach(function (s) { s = cleanText_(s, 120).substring(0, 120); if (s && orgs.indexOf(s) < 0) orgs.push(s); });
+  var depts = readAll_('Departments').filter(function (d) { return d.Active !== false && String(d.Active).toUpperCase() !== 'FALSE'; }).map(function (d) { return String(d.Name).trim(); });
+  depts = depts.filter(function (n, i) { return n && depts.indexOf(n) === i; }).sort(function (a, c) { return a.localeCompare(c, 'th'); });
+  return { org: orgName_(), prefixes: PREFIXES_, planRoles: PLAN_ROLES_.map(function (r) { return { value: r.value, desc: r.desc }; }),
+    organizations: orgs, departments: depts, consent: CONSENT_TEXT_ };
+}
+
+/** access.request: ส่ง/แก้ไขคำขอ (ผู้ใช้สถานะ new/pending/rejected เท่านั้น) */
+function accessRequest_(p) {
+  var claims = verifyGoogleIdToken_(p.idToken), email = String(claims.email).toLowerCase();
+  var isBoot = adminEmails_().indexOf(email) >= 0, u = userRow_(email);
+  if (!u) checkDomain_(email, isBoot);
+  if (isBoot || (u && u.Status === 'approved')) return { status: 'approved', message: 'บัญชีนี้ได้รับอนุมัติแล้ว กรุณาเข้าสู่ระบบ' };
+  if (u && u.Status === 'suspended') fail_('AUTH', 'บัญชีของท่านถูกระงับการใช้งาน กรุณาติดต่อผู้ดูแลระบบ');
+  var c = profileClean_(p), now = nowIso_();
+  var dn = c.dept.replace(/\s+/g, '').toLowerCase();
+  readAll_('Departments').some(function (d) { if (String(d.Name).replace(/\s+/g, '').toLowerCase() === dn) { c.dept = String(d.Name).trim(); return true; } return false; });
+  var notify = !u || u.Status === 'new' || u.Status === 'rejected' || !u.FirstName; // แจ้งแอดมินเมื่อเป็นคำขอใหม่/ยื่นใหม่ ไม่แจ้งซ้ำเมื่อแก้ไขคำขอเดิม
+  if (notify) {
+    var cap = Number(prop_('MAX_PENDING', '200')) || 200; // กันคำขอล้นชีต
+    if (readAll_('Users').filter(function (r) { return r.Status === 'pending'; }).length >= cap) fail_('LIMIT', 'ขณะนี้มีคำขอรอพิจารณาจำนวนมาก กรุณาติดต่อผู้ดูแลระบบ');
+  }
+  if (!u) {
+    u = { Email: email, Name: '', Role: 'user', Status: 'new', Department: '', PersonName: '', Picture: claims.picture || '', RequestedAt: now,
+      ApprovedBy: '', ApprovedAt: '', LastLoginAt: '', Note: '' };
+    insert_('Users', u); u = userRow_(email);
+  }
+  u.Prefix = c.prefix; u.FirstName = c.first; u.LastName = c.last; u.Name = fullName_(c.prefix, c.first, c.last);
+  u.Organization = c.org; u.Department = c.dept; u.PlanRole = c.role; u.RequestNote = c.note; u.ConsentAt = now;
+  u.Status = 'pending'; if (notify) u.RequestedAt = now;
+  u.Note = ''; u.Picture = keepAvatar_(u, claims);
+  update_('Users', u._row, u);
+  audit_(email, notify ? 'ส่งคำขออนุญาตเข้าใช้งาน' : 'แก้ไขคำขออนุญาต', 'User', email, u.PlanRole + ' · ' + u.Organization + ' / ' + u.Department);
+  if (notify) notifyAdminsNewUser_(u);
+  return { status: 'pending', message: 'ส่งคำขอเรียบร้อยแล้ว', email: email, name: u.Name, picture: u.Picture, profile: profileOut_(u) };
+}
+
+/** ล็อกอินด้วย Google: คืน status = approved | new | pending | rejected | suspended */
 function loginGoogle_(p) {
   var claims = verifyGoogleIdToken_(p.idToken);
   var email = String(claims.email).toLowerCase();
   var u = userRow_(email);
   var isBootAdmin = adminEmails_().indexOf(email) >= 0;
   var now = nowIso_();
-  var allowedDomains = prop_('ALLOWED_EMAIL_DOMAINS', '').toLowerCase().split(',').map(function (s) { return s.trim(); }).filter(String);
-  if (!u && !isBootAdmin && allowedDomains.length && allowedDomains.indexOf(email.split('@')[1] || '') < 0) fail_('AUTH', 'อีเมลนี้ไม่อยู่ในโดเมนที่ระบบอนุญาต (' + allowedDomains.join(', ') + ') กรุณาใช้อีเมลหน่วยงาน');
+  if (!u) checkDomain_(email, isBootAdmin);
 
   if (!u) {
     u = {
-      Email: email, Name: claims.name || email, Role: isBootAdmin ? 'admin' : 'user', Status: isBootAdmin ? 'approved' : 'pending',
+      Email: email, Name: isBootAdmin ? (claims.name || email) : '', Role: isBootAdmin ? 'admin' : 'user', Status: isBootAdmin ? 'approved' : 'new',
       Department: '', PersonName: '', Picture: claims.picture || '', RequestedAt: now,
       ApprovedBy: isBootAdmin ? '(ADMIN_EMAILS)' : '', ApprovedAt: isBootAdmin ? now : '', LastLoginAt: '', Note: ''
     };
     insert_('Users', u);
     u = userRow_(email);
-    audit_(email, isBootAdmin ? 'สร้างบัญชีแอดมินแรก' : 'ขอสิทธิ์เข้าใช้งาน', 'User', email, claims.name || '');
-    if (!isBootAdmin) notifyAdminsNewUser_(u);
+    audit_(email, isBootAdmin ? 'สร้างบัญชีแอดมินแรก' : 'ล็อกอินครั้งแรก (รอกรอกแบบขออนุญาต)', 'User', email, claims.name || '');
   } else if (isBootAdmin && (u.Role !== 'admin' || u.Status !== 'approved')) {
     // อีเมลที่อยู่ใน ADMIN_EMAILS ต้องเข้าได้เสมอ (กันแอดมินล็อกตัวเองออก)
     u.Role = 'admin'; u.Status = 'approved'; u.ApprovedBy = '(ADMIN_EMAILS)'; u.ApprovedAt = now;
@@ -758,10 +865,14 @@ function loginGoogle_(p) {
 
   if (u.Status !== 'approved') {
     u.Picture = keepAvatar_(u, claims); update_('Users', u._row, u);
-    var msg = u.Status === 'pending' ? 'บัญชีของท่านอยู่ระหว่างรอผู้ดูแลระบบอนุมัติ'
-      : u.Status === 'rejected' ? 'คำขอของท่านไม่ได้รับอนุมัติ กรุณาติดต่อผู้ดูแลระบบ'
+    var needs = u.Status === 'new' || (u.Status === 'pending' && !u.FirstName); // บัญชีเดิม (v2.6) ที่ยังไม่มีข้อมูลแบบขออนุญาต ต้องกรอกเพิ่ม
+    var msg = u.Status === 'new' ? 'กรุณากรอกข้อมูลเพื่อขออนุญาตเข้าใช้งาน'
+      : u.Status === 'pending' ? (needs ? 'กรุณากรอกข้อมูลเพิ่มเติมเพื่อประกอบการพิจารณา' : 'คำขอของท่านอยู่ระหว่างรอผู้ดูแลระบบอนุมัติ')
+      : u.Status === 'rejected' ? 'คำขอของท่านไม่ได้รับอนุมัติ'
       : 'บัญชีของท่านถูกระงับการใช้งาน กรุณาติดต่อผู้ดูแลระบบ';
-    return { status: u.Status, message: msg, email: email, name: u.Name };
+    return { status: u.Status, needsProfile: needs, canReapply: u.Status === 'rejected', message: msg, email: email,
+      name: u.FirstName ? u.Name : (claims.name || u.Name), picture: u.Picture, profile: profileOut_(u),
+      hint: { firstName: claims.given_name || '', lastName: claims.family_name || '' }, reason: u.Status === 'rejected' ? str_(u.Note) : '' };
   }
 
   u.LastLoginAt = now; u.Picture = keepAvatar_(u, claims);
@@ -787,9 +898,17 @@ function requireUser_(token, minRole) {
 // จัดการผู้ใช้ (เฉพาะแอดมิน)
 // ---------------------------------------------------------------------------------
 function usersList_(admin) {
-  return readAll_('Users').map(function (r) {
+  var byNorm = {};
+  readAll_('People').filter(function (x) { return x.Active !== false && String(x.Active).toUpperCase() !== 'FALSE'; }).forEach(function (x) { byNorm[normName_(x.Name)] = x.Name; });
+  var rows = readAll_('Users'), cnt = {};
+  rows.forEach(function (r) { if (r.FirstName) { var k = normName_(r.FirstName + r.LastName); cnt[k] = (cnt[k] || 0) + 1; } });
+  return rows.map(function (r) {
     var o = stripRow_(r);
-    o.RequestedAt = String(o.RequestedAt); o.ApprovedAt = String(o.ApprovedAt); o.LastLoginAt = String(o.LastLoginAt);
+    o.RequestedAt = String(o.RequestedAt); o.ApprovedAt = String(o.ApprovedAt); o.LastLoginAt = String(o.LastLoginAt); o.ConsentAt = String(o.ConsentAt || '');
+    var k = o.FirstName ? normName_(o.FirstName + o.LastName) : '';
+    o.matchPerson = (!o.PersonName && k) ? (byNorm[k] || '') : '';   // แนะนำผูกกับทะเบียนผู้รับผิดชอบ
+    o.dupName = !!(k && cnt[k] > 1);                                  // ชื่อซ้ำกับบัญชีอื่น (อาจขอด้วยอีเมลสองบัญชี)
+    var pr = PLAN_ROLES_.filter(function (x) { return x.value === o.PlanRole; })[0]; o.suggestRole = pr ? pr.suggest : '';
     return o;
   });
 }
@@ -803,8 +922,15 @@ function usersUpdate_(admin, p) {
   if (p.status !== undefined) {
     if (USER_STATUSES_.indexOf(p.status) < 0) fail_('VALIDATION', 'สถานะไม่ถูกต้อง');
     if (isSelf && p.status !== 'approved') fail_('VALIDATION', 'ไม่สามารถระงับ/ปฏิเสธบัญชีของตนเองได้');
-    var wasApproved = u.Status === 'approved';
+    var wasApproved = u.Status === 'approved', prevStatus = u.Status;
+    if (p.status === 'approved' && !u.FirstName && !str_(p.name)) fail_('VALIDATION', 'ผู้ขอยังไม่ได้กรอกแบบขออนุญาต กรุณาระบุชื่อ-สกุลก่อนอนุมัติ');
+    if (p.status === 'rejected' && prevStatus !== 'rejected' && str_(p.note).length < 3) fail_('VALIDATION', 'กรุณาระบุเหตุผลที่ไม่อนุมัติ (ผู้ขอจะเห็นเหตุผลนี้)');
     u.Status = p.status;
+    if (p.status === 'rejected' && prevStatus !== 'rejected') {
+      sendMailSafe_(u.Email, 'ผลการพิจารณาคำขอเข้าใช้งานระบบแผนงานโครงการ ' + orgName_(),
+        'สวัสดีคุณ ' + (u.Name || '') + '\nคำขอเข้าใช้งานระบบของท่านยังไม่ได้รับอนุมัติ\nเหตุผล: ' + str_(p.note) +
+        '\nหากต้องการแก้ไขข้อมูลและยื่นคำขอใหม่ ให้เข้าสู่ระบบด้วยบัญชี Google เดิมอีกครั้ง หรือติดต่อผู้ดูแลระบบ' + appLink_());
+    }
     if (p.status === 'approved' && !wasApproved) {
       u.ApprovedBy = admin.Email; u.ApprovedAt = nowIso_();
       sendMailSafe_(u.Email, 'บัญชีของท่านได้รับอนุมัติแล้ว - ระบบแผนงานโครงการ ' + orgName_(),
@@ -817,7 +943,12 @@ function usersUpdate_(admin, p) {
     u.Role = p.role;
   }
   if (p.name !== undefined) u.Name = str_(p.name);
-  if (p.department !== undefined) u.Department = str_(p.department);
+  if (p.department !== undefined) u.Department = cleanText_(p.department, 120).substring(0, 120);
+  if (p.organization !== undefined) u.Organization = cleanText_(p.organization, 120).substring(0, 120);
+  if (p.planRole !== undefined) {
+    if (p.planRole && !PLAN_ROLES_.some(function (r) { return r.value === p.planRole; })) fail_('VALIDATION', 'หน้าที่ต่อแผนงานไม่ถูกต้อง');
+    u.PlanRole = str_(p.planRole);
+  }
   if (p.personName !== undefined) u.PersonName = str_(p.personName);
   if (p.note !== undefined) u.Note = str_(p.note);
   update_('Users', u._row, u);
@@ -2373,6 +2504,8 @@ function handle_(req) {
     var action = str_(req && req.action), params = (req && req.params) || {};
     if (action === 'ping') return { ok: true, data: { service: 'sansai-plan-api', version: APP_VERSION, time: nowIso_() } };
     if (action === 'loginGoogle') return { ok: true, data: withLock_(function () { return loginGoogle_(params); }) };
+    if (action === 'access.options') return { ok: true, data: accessOptions_() };
+    if (action === 'access.request') return { ok: true, data: withLock_(function () { return accessRequest_(params); }) };
     var def = ACTIONS_[action];
     if (!def) fail_('BAD_REQUEST', 'ไม่รู้จักคำสั่ง ' + action);
     var user = requireUser_(req.token, def.role);
